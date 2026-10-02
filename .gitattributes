@@ -1,0 +1,4 @@
+# Shell hooks must keep LF endings even when students clone on Windows
+# (core.autocrlf=true would otherwise turn them into CRLF and break bash).
+*.sh text eol=lf
+scripts/_pyrun.cmd text eol=crlf

@@ -1,0 +1,21 @@
+# AI logs - giữ thư mục, bỏ nội dung
+.ai-log/*.jsonl
+.ai-log/archive/
+
+# Bí mật
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
