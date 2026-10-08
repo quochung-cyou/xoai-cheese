@@ -60,6 +60,37 @@ vite.config.ts      # plugin react + tailwind, alias @ -> ./src
 - `vite build` cần quyền rộng hơn sandbox (Vite spawn tiến trình con và nạp native binding của Tailwind).
   Trên máy bình thường lệnh chạy không cần lưu ý này.
 
+## Cấu hình & triển khai (Cloudflare Pages)
+
+Đây là **ứng dụng thuần client-side**. Không có backend, và **không có biến môi trường
+build-time nào cả**: endpoint, model và API key do người dùng nhập trong hộp thoại
+Settings lúc chạy, lưu vào `localStorage` của trình duyệt.
+
+Lý do cố ý không dùng `VITE_*`: Vite nhúng mọi giá trị `VITE_` vào bundle JS lúc build,
+nên bất kỳ ai mở trang cũng đọc được — không thể đưa key vào bản deploy. `DEFAULT_CONFIG`
+trong `src/magic-board/lib/settings.ts` chỉ là giá trị gợi ý cho placeholder, không phải
+cấu hình thật.
+
+### Thiết lập Cloudflare Pages
+
+Chọn **Pages**, không phải Workers — repo này dùng `public/_headers`, vốn là tính năng
+của Pages và cần thiết để `/mb-assets/*` trả `Access-Control-Allow-Origin: *` cho các
+iframe artifact chạy ở origin `null`.
+
+| Trường | Giá trị |
+|---|---|
+| Production branch | `main` |
+| Root directory | `code/frontend-src` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Environment variables | **để trống** |
+
+`Root directory` là bắt buộc: repo là monorepo, app Vite nằm ở `code/frontend-src/`.
+Build từ gốc repo sẽ không tìm thấy `package.json`.
+
+Không cần `wrangler.toml`: Pages đọc `dist/` cùng `_headers` sẵn.
+
+
 ## Ghi chú template gốc (create-vite)
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.

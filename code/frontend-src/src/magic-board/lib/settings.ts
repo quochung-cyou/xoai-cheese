@@ -1,11 +1,12 @@
 /**
- * Magic Board settings — where the model credentials actually come from.
+ * Magic Board settings — model credentials, supplied entirely at runtime.
  *
- * Two layers, in priority order:
- *  1. localStorage  — whatever the user typed in the in-app Settings dialog.
- *  2. build-time env — VITE_LLM_API_KEY / VITE_LLM_BASE_URL / VITE_LLM_MODEL,
- *     so a deployment can ship with a key already filled in ("key can be
- *     filled from our side") and the dialog still works as an override.
+ * This is a pure client-side app. There is deliberately **no build-time
+ * configuration**: nothing is read from `VITE_*`, so no credential is ever
+ * baked into the JS bundle and every deployment ships the same artifact.
+ *
+ * The only layer is localStorage — whatever the user typed in the in-app
+ * Settings dialog. `DEFAULT_CONFIG` just seeds the dialog's placeholders.
  *
  * Nothing here is a backend: these values are read in the browser and sent
  * straight to the model endpoint the user configured.
@@ -43,27 +44,8 @@ export interface LLMConfig {
 const STORAGE_KEY = 'magic-board.llm-config';
 const HOTKEY_KEY = 'magic-board.analyze-hotkey';
 
-/**
- * Build-time env, read defensively.
- *
- * Vite replaces `import.meta.env` with an object literal, but the property
- * access has to survive being imported outside a Vite bundle (the script
- * harnesses) where `import.meta.env` is undefined.
- */
-function envVar(name: string): string {
-  const env = (import.meta as { env?: Record<string, unknown> }).env;
-  const value = env?.[name];
-  return typeof value === 'string' ? value : '';
-}
-
-/** Build-time defaults. Empty strings stay empty so the dialog reports the
- *  gap honestly instead of pretending a key exists. */
-export const ENV_DEFAULTS: LLMConfig = {
-  base_url: envVar('VITE_LLM_BASE_URL'),
-  api_key: envVar('VITE_LLM_API_KEY'),
-  model: envVar('VITE_LLM_MODEL'),
-};
-
+/** Seed values for the Settings dialog. `api_key` is always empty: a key is
+ *  runtime input and must never be committed or compiled in. */
 const DEFAULT_CONFIG: LLMConfig = {
   base_url: 'https://api.openai.com/v1',
   api_key: '',
@@ -76,10 +58,6 @@ const DEFAULT_CONFIG: LLMConfig = {
   // The classifier emits one small JSON object. A reasoning model can still
   // spend this on thinking, so it gets its own knob.
   classify_max_tokens: 1024,
-  // Env values win over the literal defaults, per-field.
-  ...(ENV_DEFAULTS.base_url ? { base_url: ENV_DEFAULTS.base_url } : {}),
-  ...(ENV_DEFAULTS.api_key ? { api_key: ENV_DEFAULTS.api_key } : {}),
-  ...(ENV_DEFAULTS.model ? { model: ENV_DEFAULTS.model } : {}),
 };
 
 /** Normalize a user-pasted endpoint into a full chat-completions URL.

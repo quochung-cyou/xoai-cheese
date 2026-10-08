@@ -36,8 +36,8 @@ function Field({
   );
 }
 
-/** Model + key settings. Everything lives in localStorage, with build-time
- *  env values as the starting point. */
+/** Cài đặt mô hình (model) + khóa API (API key). Mọi thứ nằm trong
+ *  localStorage, với giá trị env lúc build làm điểm khởi đầu. */
 export default function SettingsDialog({
   open,
   onClose,
@@ -55,7 +55,7 @@ export default function SettingsDialog({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // Re-read on open so env/localStorage edits elsewhere show up.
+  // Đọc lại mỗi lần mở để các thay đổi env/localStorage ở nơi khác hiện ra.
   useEffect(() => {
     if (open) {
       setCfg(loadLLMConfig());
@@ -64,7 +64,7 @@ export default function SettingsDialog({
     }
   }, [open, hotkey]);
 
-  // Escape closes.
+  // Nhấn Escape để đóng.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -92,7 +92,7 @@ export default function SettingsDialog({
       const reply = await completeChat(cfg, 'Reply with the single word: pong', [
         { type: 'text', text: 'ping' },
       ]);
-      setTestResult({ ok: true, text: `Connected — model replied "${reply.trim().slice(0, 40)}"` });
+      setTestResult({ ok: true, text: `Đã kết nối — mô hình (model) trả lời "${reply.trim().slice(0, 40)}"` });
     } catch (e) {
       setTestResult({ ok: false, text: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -113,11 +113,11 @@ export default function SettingsDialog({
       >
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <KeyRound size={15} className="text-primary" />
-          <h2 className="text-sm font-semibold">Model settings</h2>
+          <h2 className="text-sm font-semibold">Cài đặt mô hình</h2>
           <button
             onClick={onClose}
             className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title="Close"
+            title="Đóng"
           >
             <X size={15} />
           </button>
@@ -342,10 +342,9 @@ export default function SettingsDialog({
           )}
 
           <p className="text-[11px] leading-snug text-muted-foreground">
-            Deployments can pre-fill these with <code className="font-mono">VITE_LLM_BASE_URL</code>,{' '}
-            <code className="font-mono">VITE_LLM_MODEL</code> and{' '}
-            <code className="font-mono">VITE_LLM_API_KEY</code> (see{' '}
-            <code className="font-mono">.env.example</code>); whatever you save here wins.
+            Everything runs in your browser. Settings are saved to this
+            browser's local storage and sent straight to your endpoint — there
+            is no server, and no key is ever built into the app.
           </p>
         </div>
 
