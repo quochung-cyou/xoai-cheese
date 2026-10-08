@@ -1,0 +1,7 @@
+{
+  "id": "saddle",
+  "match": "a saddle surface / hyperbolic paraboloid / Pringle shape — labels like \"saddle\", \"hyperbolic paraboloid\", \"pringle\", \"3d saddle\", or a horse-saddle/curved-chip sketch",
+  "params": "{\"b\": -1.2..1.2 — bowl <0, cylinder 0, saddle >0; \"flat\": true|false — start flattened/unfolded; \"slice\": true|false — open the slicing plane; \"tilt\": 0-180, \"offset\": -1.4..1.4, \"spin\": 0-360, \"cut\": \"full\"|\"above\"|\"below\"} — all optional",
+  "required_params": [],
+  "param_defaults": {}
+}

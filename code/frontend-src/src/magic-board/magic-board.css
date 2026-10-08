@@ -1,0 +1,101 @@
+/**
+ * Magic Board styles — the few things Tailwind can't express, plus the
+ * Excalidraw container sizing.
+ */
+
+/* Excalidraw needs an explicitly sized container. */
+.mb-canvas,
+.mb-canvas .excalidraw,
+.mb-canvas .excalidraw-container {
+  height: 100%;
+  width: 100%;
+}
+
+/* Chalkboard canvas: the dark board comes from `viewBackgroundColor` on the
+   Excalidraw element (see BoardCanvas). We intentionally do NOT override
+   Excalidraw's own theme variables — that risks unreadable UI chrome. */
+
+/* Slim scrollbars in the chat panel. */
+.mb-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.mb-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.mb-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 9999px;
+}
+.mb-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- animations (ported from the ai4edu UI kit) ---- */
+
+@keyframes shimmer-text {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes pixel-on {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+@keyframes word-in {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*='animation'] {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Excalidraw injects its own full-height layout; keep the page from
+   scrolling when the canvas is focused. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}

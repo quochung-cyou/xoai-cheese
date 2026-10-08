@@ -1,0 +1,7 @@
+{
+  "id": "hyperboloid",
+  "match": "a one-sheet hyperboloid / cooling tower / hourglass surface made of straight ruled lines — labels like \"hyperboloid\", \"cooling tower\", \"ruled surface\", \"3d waist\", or an hourglass sketch",
+  "params": "{\"waist_a\": 0.4-1.4; \"flat\": true|false — start flattened/unfolded} — all optional",
+  "required_params": [],
+  "param_defaults": {}
+}

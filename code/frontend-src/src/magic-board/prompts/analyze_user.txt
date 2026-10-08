@@ -1,0 +1,1 @@
+Analyze this hand-drawn sketch carefully. It is a STEM diagram (physics, math, CS, or engineering). Identify the concept, derive the models/equations, and produce the output per the schema — "elements" for an editable whiteboard drawing or "html" for an interactive simulation, whichever fits best.

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script>
+addEventListener('error', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var t=(e&&e.message)||'Script failed to load';
+    var f=(e&&e.filename)||'';
+    if(m) m.textContent=f?t+' \u2014 '+f:t;
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+}, true);
+addEventListener('unhandledrejection', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var r=e&&e.reason;
+    var t=(r&&(r.message||r))||'Request failed';
+    if(m) m.textContent=String(t);
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+});
+</script>
+<meta charset="utf-8">
+<style>
+:root{--cell:46px;--indigo:#4f46e5;--sky:#0ea5e9;--amber:#f59e0b;--emerald:#10b981;--ink:#0f172a;--muted:#475569;--line:#cbd5e1;--card:#ffffff;}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f8fafc;color:var(--ink);background-image:linear-gradient(#eef2f7 1px,transparent 1px),linear-gradient(90deg,#eef2f7 1px,transparent 1px);background-size:24px 24px;}
+.app{height:100%;display:flex;flex-direction:column;gap:10px;padding:10px 12px;overflow:auto;}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+h1{font-size:15px;margin:0;font-weight:700;}
+h1 span{color:var(--muted);font-weight:500;font-size:12px;margin-left:6px;}
+#status{font-size:12px;padding:3px 10px;border-radius:999px;background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;white-space:nowrap;}
+#status.warn{background:#fef3c7;color:#92400e;border-color:#fde68a;}
+#status.err{background:#fee2e2;color:#991b1b;border-color:#fecaca;}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;}
+.ctl{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);}
+.ctl b{color:var(--ink);font-weight:600;}
+.ctl span{font-weight:700;color:var(--ink);min-width:30px;text-align:center;}
+input[type=range]{accent-color:var(--indigo);width:74px;}
+button{font:inherit;font-size:12px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:5px 12px;cursor:pointer;}
+button:hover{background:#eef2ff;border-color:var(--indigo);color:var(--indigo);}
+#play{background:var(--indigo);color:#fff;border-color:var(--indigo);min-width:76px;}
+#play:hover{background:#4338ca;color:#fff;}
+.banner{display:none;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;font-size:12px;border-radius:8px;padding:6px 10px;font-weight:600;}
+.banner.show{display:block;}
+.mats{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center;}
+.mat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;}
+.mat h2{margin:0 0 6px;font-size:12px;text-align:center;color:var(--muted);font-weight:700;}
+.grid{display:grid;gap:4px;}
+.grid input{width:var(--cell);height:var(--cell);text-align:center;font:600 13px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);padding:0;}
+.grid input:focus{outline:2px solid var(--sky);border-color:var(--sky);}
+.cell{width:var(--cell);height:var(--cell);display:flex;align-items:center;justify-content:center;font:600 13px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:6px;background:#f1f5f9;color:var(--muted);transition:background .15s;}
+.op{font-size:22px;font-weight:700;color:var(--muted);padding:0 2px;}
+.grid input.hl-row{background:#eef2ff;border-color:#c7d2fe;}
+.grid input.hl-col{background:#e0f2fe;border-color:#bae6fd;}
+.grid input.hl-term{background:var(--indigo);color:#fff;border-color:var(--indigo);transform:scale(1.07);}
+.cell.hl-active{background:#fff7ed;border-color:var(--amber);box-shadow:inset 0 0 0 2px #fde68a;}
+.cell.hl-done{background:#d1fae5;border-color:var(--emerald);color:#065f46;}
+@keyframes flash{0%{transform:scale(1)}50%{transform:scale(1.18)}100%{transform:scale(1)}}
+.cell.flash{animation:flash .45s ease;}
+.trace{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;min-height:58px;}
+.trace .eq{font:600 13px ui-monospace,Menlo,Consolas,monospace;margin-bottom:6px;color:var(--ink);}
+.trace .eq b{color:var(--indigo);}
+.chips{display:flex;flex-wrap:wrap;gap:5px;align-items:center;}
+.chip{font:600 11px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:6px;padding:3px 7px;color:var(--muted);background:#f8fafc;}
+.chip.done{background:#e0e7ff;border-color:#c7d2fe;color:#3730a3;}
+.chip.current{background:var(--amber);border-color:#d97706;color:#7c2d12;box-shadow:0 0 0 2px #fde68a;}
+.chip.todo{border-style:dashed;opacity:.55;}
+.chip.total{margin-left:auto;font-weight:700;color:#059669;background:#ecfdf5;border-color:#a7f3d0;}
+.foot{font-size:11px;color:var(--muted);text-align:center;}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+<h1>Matrix Multiplication <span>C = A · B, C[i][j] = Σₖ A[i][k]·B[k][j]</span></h1>
+<div id="status">Ready</div>
+</header>
+<div class="banner" id="banner"></div>
+<div class="controls">
+<div class="ctl"><b>Delay</b><input type="range" id="delay" min="120" max="1200" step="60" value="500"><span id="dv">500ms</span></div>
+<button id="play">&#9654; Play</button>
+<button id="step">Step</button>
+<button id="reset">Reset</button>
+</div>
+<div class="mats">
+<div class="mat"><h2 id="at"></h2><div class="grid" id="aGrid"></div></div>
+<div class="op">&times;</div>
+<div class="mat"><h2 id="bt"></h2><div class="grid" id="bGrid"></div></div>
+<div class="op">=</div>
+<div class="mat"><h2 id="ct"></h2><div class="grid" id="cGrid"></div></div>
+</div>
+<div class="trace">
+<div class="eq" id="eq">&mdash;</div>
+<div class="chips" id="chips"></div>
+</div>
+<div class="foot">Indigo cell = current A[i][k]&middot;B[k][j] term &middot; lavender = row of A in use &middot; blue = column of B in use &middot; green = finished C cell</div>
+</div>
+<script>
+(function(){
+'use strict';
+var PARAMS = __PARAMS__;
+var FB_A = [[1,2,-1],[0,3,4]];
+var FB_B = [[2,1],[-1,0],[3,-2]];
+
+function validMat(m){
+  return Array.isArray(m) && m.length > 0 && m.length <= 6 &&
+    m.every(function(r){ return Array.isArray(r) && r.length === m[0].length && r.length <= 6 &&
+      r.every(function(v){ return typeof v === 'number' && isFinite(v); }); });
+}
+var DEF_A = validMat(PARAMS.A) ? PARAMS.A : FB_A;
+var DEF_B = validMat(PARAMS.B) ? PARAMS.B : FB_B;
+
+var A = [], B = [], C = [];
+var m = 0, na = 0, nb = 0, p = 0;
+var i = 0, j = 0, k = 0, acc = 0, lastK = -1, running = false, timer = null, done = false;
+var delay = 500;
+var aCells = [], bCells = [], cCells = [];
+
+function $(id){ return document.getElementById(id); }
+function fmt(v){ if(typeof v !== 'number' || !isFinite(v)) return 'NaN'; var r = Math.round(v*100)/100; if(r === 0) r = 0; return String(r); }
+function compatible(){ return na === nb; }
+function setStatus(txt, cls){ var s = $('status'); s.textContent = txt; s.className = cls || ''; }
+
+function loadMatrices(){
+  A = DEF_A.map(function(r){ return r.slice(); });
+  B = DEF_B.map(function(r){ return r.slice(); });
+  m = A.length; na = A[0].length; nb = B.length; p = B[0].length;
+  C = [];
+  for (var r = 0; r < m; r++){ C[r] = []; for (var c = 0; c < p; c++) C[r][c] = null; }
+  $('at').textContent = 'A (' + m + '×' + na + ')';
+  $('bt').textContent = 'B (' + nb + '×' + p + ')';
+  $('ct').textContent = 'C (' + m + '×' + p + ')';
+  buildGrids(); setCellSize(); resetRun();
+}
+
+function buildGrids(){
+  var ag = $('aGrid'); ag.innerHTML = ''; ag.style.gridTemplateColumns = 'repeat(' + na + ',var(--cell))'; aCells = [];
+  var bg = $('bGrid'); bg.innerHTML = ''; bg.style.gridTemplateColumns = 'repeat(' + p + ',var(--cell))'; bCells = [];
+  var cg = $('cGrid'); cg.innerHTML = ''; cg.style.gridTemplateColumns = 'repeat(' + p + ',var(--cell))'; cCells = [];
+  var r, c, inp, d;
+  for (r = 0; r < m; r++){ aCells[r] = []; for (c = 0; c < na; c++){
+    inp = document.createElement('input'); inp.type = 'number'; inp.step = 'any'; inp.value = fmt(A[r][c]);
+    (function(rr, cc, el){ el.addEventListener('input', function(){ var v = parseFloat(el.value); A[rr][cc] = isFinite(v) ? v : 0; resetRun(); }); })(r, c, inp);
+    ag.appendChild(inp); aCells[r][c] = inp;
+  }}
+  for (r = 0; r < nb; r++){ bCells[r] = []; for (c = 0; c < p; c++){
+    inp = document.createElement('input'); inp.type = 'number'; inp.step = 'any'; inp.value = fmt(B[r][c]);
+    (function(rr, cc, el){ el.addEventListener('input', function(){ var v = parseFloat(el.value); B[rr][cc] = isFinite(v) ? v : 0; resetRun(); }); })(r, c, inp);
+    bg.appendChild(inp); bCells[r][c] = inp;
+  }}
+  for (r = 0; r < m; r++){ cCells[r] = []; for (c = 0; c < p; c++){
+    d = document.createElement('div'); d.className = 'cell'; d.textContent = '·'; cg.appendChild(d); cCells[r][c] = d;
+  }}
+}
+
+function setCellSize(){
+  var maxDim = Math.max(m, na, nb, p);
+  var s = maxDim <= 3 ? 46 : (maxDim === 4 ? 38 : 32);
+  if (window.innerWidth < 520) s -= 8;
+  if (window.innerHeight < 430) s -= 4;
+  document.documentElement.style.setProperty('--cell', s + 'px');
+}
+
+function flashCell(r, c){ var cell = cCells[r][c]; cell.classList.add('flash'); setTimeout(function(){ cell.classList.remove('flash'); }, 500); }
+
+function resetRun(){
+  if (timer){ clearTimeout(timer); timer = null; }
+  running = false; done = false; i = 0; j = 0; k = 0; acc = 0; lastK = -1;
+  $('play').innerHTML = '&#9654; Play';
+  for (var r = 0; r < m; r++) for (var c = 0; c < p; c++) C[r][c] = null;
+  var b = $('banner');
+  if (!compatible()){
+    b.classList.add('show');
+    b.textContent = 'Incompatible dimensions: A is ' + m + '×' + na + ' and B is ' + nb + '×' + p + '. Inner dimensions must match (cols of A = rows of B).';
+    setStatus('Error: incompatible dimensions', 'err');
+  } else {
+    b.classList.remove('show');
+    setStatus('Ready', '');
+  }
+  render('idle');
+}
+
+function tick(){
+  if (!compatible()) return;
+  var state = 'term';
+  if (k < na){
+    acc += A[i][k] * B[k][j]; lastK = k; k++;
+    if (k >= na){ C[i][j] = acc; flashCell(i, j); state = 'doneCell'; }
+  }
+  render(state);
+  if (state === 'doneCell'){
+    acc = 0; k = 0; lastK = -1; j++;
+    if (j >= p){ j = 0; i++; }
+    if (i >= m){
+      running = false; done = true;
+      setStatus('Computation complete', '');
+      $('play').innerHTML = '&#8635; Replay';
+      render('done');
+      return;
+    }
+  }
+  if (running) timer = setTimeout(tick, delay);
+}
+
+function render(state){
+  var r, c;
+  for (r = 0; r < m; r++) for (c = 0; c < na; c++) aCells[r][c].classList.remove('hl-row', 'hl-term');
+  for (r = 0; r < nb; r++) for (c = 0; c < p; c++) bCells[r][c].classList.remove('hl-col', 'hl-term');
+  for (r = 0; r < m; r++) for (c = 0; c < p; c++){ cCells[r][c].className = 'cell'; cCells[r][c].textContent = C[r][c] === null ? '·' : fmt(C[r][c]); }
+  var eq = $('eq'), chips = $('chips');
+  if (!compatible()){ eq.textContent = 'Cannot multiply: ' + m + '×' + na + ' · ' + nb + '×' + p; chips.innerHTML = ''; return; }
+  if (state === 'done' || done){ eq.innerHTML = '<b>C</b> = A · B — all ' + (m * p) + ' entries computed'; chips.innerHTML = ''; return; }
+  for (c = 0; c < na; c++) aCells[i][c].classList.add('hl-row');
+  for (r = 0; r < nb; r++) bCells[r][j].classList.add('hl-col');
+  if (state !== 'doneCell' && lastK >= 0){ aCells[i][lastK].classList.add('hl-term'); bCells[lastK][j].classList.add('hl-term'); }
+  if (state === 'doneCell') cCells[i][j].classList.add('hl-done'); else cCells[i][j].classList.add('hl-active');
+  var total = state === 'doneCell' ? C[i][j] : acc;
+  if (state === 'doneCell'){
+    eq.innerHTML = '<b>C[' + (i+1) + '][' + (j+1) + ']</b> = ∑<sub>k=1</sub><sup>' + na + '</sup> A[' + (i+1) + '][k]·B[k][' + (j+1) + '] = <b style="color:#059669">' + fmt(C[i][j]) + '</b>';
+  } else {
+    eq.innerHTML = '<b>C[' + (i+1) + '][' + (j+1) + ']</b> = ∑<sub>k=1</sub><sup>' + na + '</sup> A[' + (i+1) + '][k]·B[k][' + (j+1) + '] &nbsp;▸ partial = <b style="color:#059669">' + fmt(acc) + '</b>';
+  }
+  chips.innerHTML = '';
+  for (var t = 0; t < na; t++){
+    var span = document.createElement('span');
+    span.className = 'chip ' + (state === 'doneCell' || t < lastK ? 'done' : (t === lastK ? 'current' : 'todo'));
+    span.textContent = fmt(A[i][t]) + '×' + fmt(B[t][j]) + '=' + fmt(A[i][t] * B[t][j]);
+    chips.appendChild(span);
+  }
+  var tot = document.createElement('span'); tot.className = 'chip total'; tot.textContent = 'Σ = ' + fmt(total); chips.appendChild(tot);
+}
+
+$('delay').addEventListener('input', function(){
+  delay = +$('delay').value; $('dv').textContent = delay + 'ms';
+  if (running){ clearTimeout(timer); timer = setTimeout(tick, delay); }
+});
+$('play').addEventListener('click', function(){
+  if (!compatible()) return;
+  if (done) resetRun();
+  running = !running;
+  if (running){ $('play').innerHTML = '&#10074;&#10074; Pause'; setStatus('Computing…', ''); tick(); }
+  else { $('play').innerHTML = '&#9654; Play'; if (timer){ clearTimeout(timer); timer = null; } setStatus('Paused', 'warn'); }
+});
+$('step').addEventListener('click', function(){
+  if (!compatible()) return;
+  if (done) resetRun();
+  if (running){ running = false; $('play').innerHTML = '&#9654; Play'; if (timer){ clearTimeout(timer); timer = null; } }
+  tick();
+  if (!done) setStatus('Stepped', 'warn');
+});
+$('reset').addEventListener('click', function(){
+  A = DEF_A.map(function(r){ return r.slice(); });
+  B = DEF_B.map(function(r){ return r.slice(); });
+  loadMatrices();
+});
+window.addEventListener('resize', setCellSize);
+loadMatrices();
+})();
+</script>
+</body>
+</html>

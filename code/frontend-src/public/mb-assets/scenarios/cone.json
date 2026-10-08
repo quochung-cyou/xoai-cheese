@@ -1,0 +1,7 @@
+{
+  "id": "cone",
+  "match": "a double cone cut by a plane — conic sections (circle, ellipse, parabola, hyperbola as plane sections); labels like \"conic\", \"cone section\", \"3d cone\", \"hình nón\", \"khối nón\", or a cone sketch with a slanted line/plane through it",
+  "params": "{\"flat\": true|false — start flattened/unfolded; \"slice\": true|false — open the slicing plane; \"tilt\": 0-180, \"offset\": -1.4..1.4, \"spin\": 0-360, \"cut\": \"full\"|\"above\"|\"below\"} — all optional",
+  "required_params": [],
+  "param_defaults": {}
+}

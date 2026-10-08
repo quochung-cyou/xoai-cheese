@@ -1,0 +1,7 @@
+{
+  "id": "paraboloid",
+  "match": "a paraboloid / parabolic dish / satellite-dish bowl — labels like \"paraboloid\", \"dish\", \"3d bowl\", or a U-shaped profile sketch",
+  "params": "{\"curvature_a\": 0.2-2.5; \"flat\": true|false — start flattened/unfolded} — all optional",
+  "required_params": [],
+  "param_defaults": {}
+}

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head><script>
+addEventListener('error', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var t=(e&&e.message)||'Script failed to load';
+    var f=(e&&e.filename)||'';
+    if(m) m.textContent=f?t+' \u2014 '+f:t;
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+}, true);
+addEventListener('unhandledrejection', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var r=e&&e.reason;
+    var t=(r&&(r.message||r))||'Request failed';
+    if(m) m.textContent=String(t);
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+});
+</script>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body { font-family: ui-monospace, monospace; background: #f8fafc; color: #0f172a;
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header { padding: 8px 12px; font-size: 12px; font-weight: 700; color: #4f46e5;
+           border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
+  #status { margin-left: auto; font-size: 10px; color: #64748b; font-weight: 400; }
+  #stage { flex: 1; position: relative; }
+  canvas { position: absolute; inset: 0; }
+  #controls { padding: 8px 12px; border-top: 1px solid #e2e8f0; background: #fff;
+              display: flex; align-items: center; gap: 14px; font-size: 11px; flex-wrap: wrap; }
+  button { background: #4f46e5; color: #fff; border: 0; border-radius: 6px;
+           padding: 4px 12px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  button.ghost { background: #e2e8f0; color: #334155; }
+  label { display: flex; align-items: center; gap: 6px; color: #475569; }
+  input[type=range] { width: 90px; }
+  .val { color: #4f46e5; font-weight: 700; min-width: 34px; }
+</style>
+</head>
+<body>
+<header>Projectile Motion<span id="status">ready</span></header>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="controls">
+  <button id="play">Launch</button>
+  <button id="reset" class="ghost">Reset</button>
+  <label>v₀ <input id="v0" type="range" min="5" max="60" value="20"><span class="val" id="v0V"></span></label>
+  <label>θ <input id="ang" type="range" min="5" max="85" value="45"><span class="val" id="angV"></span></label>
+  <label>g <input id="g" type="range" min="16" max="250" value="98"><span class="val" id="gV"></span></label>
+</div>
+<script>
+const PARAMS = __PARAMS__;
+const P = {
+  v0: Number(PARAMS.v0) > 0 ? Number(PARAMS.v0) : 20,
+  ang: (Number(PARAMS.angle_deg) || 45) * Math.PI / 180,
+  g: Number(PARAMS.g) > 0 ? Number(PARAMS.g) : 9.81,
+};
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const status = document.getElementById('status');
+let t = 0, playing = false, raf = null, last = 0;
+
+// Analytic solution — no integrator needed.
+const x = (t) => P.v0 * Math.cos(P.ang) * t;
+const y = (t) => P.v0 * Math.sin(P.ang) * t - 0.5 * P.g * t * t;
+const tLand = () => 2 * P.v0 * Math.sin(P.ang) / P.g;
+const range = () => x(tLand());
+const apex = () => (P.v0 * Math.sin(P.ang)) ** 2 / (2 * P.g);
+
+function draw() {
+  const w = cv.width, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  // fit range+apex into viewport with padding
+  const sx = (w - 80) / Math.max(range(), 1);
+  const sy = (h - 80) / Math.max(apex(), 1);
+  const s = Math.min(sx, sy);
+  const ox = 50, oy = h - 40;
+  // ground + grid
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1;
+  ctx.strokeRect(0, 0, 0, 0);
+  ctx.fillStyle = '#e2e8f0';
+  for (let gx = 20; gx < w; gx += 40) for (let gy = 20; gy < h - 40; gy += 40) ctx.fillRect(gx, gy, 1.5, 1.5);
+  ctx.strokeStyle = '#94a3b8'; ctx.beginPath();
+  ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.stroke();
+  // dashed full trajectory
+  ctx.strokeStyle = '#c7d2fe'; ctx.setLineDash([4, 4]); ctx.beginPath();
+  for (let tt = 0; tt <= tLand(); tt += tLand() / 100) {
+    const px = ox + x(tt) * s, py = oy - y(tt) * s;
+    tt === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+  // flown path
+  ctx.strokeStyle = '#4f46e5'; ctx.lineWidth = 2; ctx.beginPath();
+  for (let tt = 0; tt <= t; tt += tLand() / 200) {
+    const px = ox + x(tt) * s, py = oy - y(tt) * s;
+    tt === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  // ball
+  const bx = ox + x(t) * s, by = oy - Math.max(y(t), 0) * s;
+  ctx.fillStyle = t >= tLand() ? '#10b981' : '#4f46e5';
+  ctx.beginPath(); ctx.arc(bx, by, 8, 0, 7); ctx.fill();
+  status.textContent = t >= tLand()
+    ? `landed — range ${range().toFixed(1)}m, apex ${apex().toFixed(1)}m`
+    : `t=${t.toFixed(1)}s  x=${x(t).toFixed(1)}m  y=${Math.max(y(t), 0).toFixed(1)}m`;
+}
+
+function frame(ts) {
+  if (!playing) return;
+  const dt = Math.min((ts - last) / 1000, 0.05); last = ts;
+  t += dt;
+  if (t >= tLand()) { t = tLand(); playing = false;
+    document.getElementById('play').textContent = 'Launch'; }
+  draw();
+  if (playing) raf = requestAnimationFrame(frame);
+}
+function reset() { playing = false; cancelAnimationFrame(raf); t = 0;
+  document.getElementById('play').textContent = 'Launch'; draw(); }
+function resize() {
+  const r = document.getElementById('stage').getBoundingClientRect();
+  cv.width = r.width; cv.height = r.height; draw();
+}
+
+document.getElementById('play').onclick = () => {
+  if (playing) { playing = false; document.getElementById('play').textContent = 'Launch'; return; }
+  if (t >= tLand()) t = 0;
+  playing = true; last = performance.now();
+  document.getElementById('play').textContent = 'Pause';
+  raf = requestAnimationFrame(frame);
+};
+document.getElementById('reset').onclick = reset;
+function bind(id, key, scale, fmt) {
+  const el = document.getElementById(id);
+  el.value = Math.round(P[key] * scale);
+  document.getElementById(id + 'V').textContent = fmt(P[key]);
+  el.oninput = () => { P[key] = Number(el.value) / scale;
+    document.getElementById(id + 'V').textContent = fmt(P[key]); reset(); };
+}
+bind('v0', 'v0', 1, (v) => v.toFixed(0) + ' m/s');
+bind('ang', 'ang', 180 / Math.PI, (v) => (v * 180 / Math.PI).toFixed(0) + '°');
+bind('g', 'g', 10, (v) => v.toFixed(1));
+window.addEventListener('resize', resize);
+reset(); resize();
+</script>
+</body>
+</html>

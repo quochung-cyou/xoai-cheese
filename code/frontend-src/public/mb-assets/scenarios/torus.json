@@ -1,0 +1,7 @@
+{
+  "id": "torus",
+  "match": "a torus / donut / bagel / ring shape — labels like \"torus\", \"donut\", \"3d ring\", or a donut sketch (circle with a hole)",
+  "params": "{\"major_r\": 0.5-1.6, \"minor_r\": 0.1-1.0; \"flat\": true|false — start flattened/unfolded; \"slice\": true|false — open the slicing plane; \"tilt\": 0-180, \"offset\": -1.4..1.4, \"spin\": 0-360, \"cut\": \"full\"|\"above\"|\"below\"} — all optional",
+  "required_params": [],
+  "param_defaults": {}
+}

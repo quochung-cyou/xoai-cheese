@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script>
+addEventListener('error', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var t=(e&&e.message)||'Script failed to load';
+    var f=(e&&e.filename)||'';
+    if(m) m.textContent=f?t+' \u2014 '+f:t;
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+}, true);
+addEventListener('unhandledrejection', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var r=e&&e.reason;
+    var t=(r&&(r.message||r))||'Request failed';
+    if(m) m.textContent=String(t);
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+});
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anatomy 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden;
+               font-family: ui-sans-serif, system-ui, sans-serif;
+               background: #f2f3f3; }
+  #stage { position: absolute; inset: 0; }
+  #hud { position: absolute; top: 8px; left: 10px; right: 10px;
+         display: flex; justify-content: space-between; align-items: flex-start;
+         pointer-events: none; z-index: 5; }
+  #title { font-size: 12px; font-weight: 600; color: #1e293b;
+           background: rgba(255,255,255,.9); border: 1px solid #e2e8f0;
+           border-radius: 6px; padding: 3px 8px; }
+  #tip { position: absolute; pointer-events: none; z-index: 6; display: none;
+         font-size: 11px; color: #1e293b; background: rgba(255,255,255,.95);
+         border: 1px solid #cbd5e1; border-radius: 5px; padding: 2px 7px;
+         box-shadow: 0 1px 4px rgba(0,0,0,.12); max-width: 240px; }
+  #bar { position: absolute; left: 8px; right: 8px; bottom: 8px;
+         display: flex; gap: 5px; flex-wrap: wrap; align-items: center;
+         z-index: 5; }
+  #bar button { font-size: 10px; padding: 3px 8px; border-radius: 6px;
+                border: 1px solid #cbd5e1; background: #fff; color: #334155;
+                cursor: pointer; }
+  #bar button:hover { border-color: #94a3b8; }
+  #bar button.off { opacity: .38; }
+  #bar input { font-size: 11px; padding: 3px 8px; border-radius: 6px;
+               border: 1px solid #cbd5e1; background: #fff; width: 130px; }
+  #status { position: absolute; right: 10px; bottom: 8px; font-size: 10px;
+            color: #64748b; pointer-events: none; }
+  #overlay { position: absolute; inset: 0; display: flex; flex-direction: column;
+             align-items: center; justify-content: center; gap: 10px;
+             background: #f2f3f3; transition: opacity .3s; z-index: 9; }
+  #overlay .spin { width: 26px; height: 26px; border: 3px solid #e2e8f0;
+                   border-top-color: #4f46e5; border-radius: 50%;
+                   animation: r 0.9s linear infinite; }
+  #overlay .msg { font-size: 11px; color: #64748b; }
+  #overlay.err .msg { color: #ef4444; max-width: 320px; text-align: center; }
+  @keyframes r { to { transform: rotate(360deg); } }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="hud"><div id="title">Anatomy 3D</div></div>
+<div id="tip"></div>
+<div id="bar"></div>
+<div id="status">loading…</div>
+<div id="overlay"><div class="spin"></div><div class="msg">Loading anatomy model…</div></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const PARAMS = __PARAMS__;
+
+const stage = document.getElementById('stage');
+const statusEl = document.getElementById('status');
+const overlay = document.getElementById('overlay');
+const overlayMsg = overlay.querySelector('.msg');
+const tipEl = document.getElementById('tip');
+const bar = document.getElementById('bar');
+
+const fail = (msg) => {
+  overlay.classList.add('err');
+  overlayMsg.textContent = msg;
+  overlay.querySelector('.spin').style.display = 'none';
+};
+
+// human-atlas model-download.ts: static hosts may return the .gz either
+// raw or transport-decoded — inspect magic bytes, decode once.
+async function fetchChunk(url, expectedBytes) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`asset ${url} -> ${res.status}`);
+  const payload = await res.arrayBuffer();
+  const sig = new Uint8Array(payload, 0, 2);
+  const gz = sig[0] === 0x1f && sig[1] === 0x8b;
+  const buf = gz && typeof DecompressionStream !== 'undefined'
+    ? await new Response(
+        new Blob([payload]).stream().pipeThrough(
+          new DecompressionStream('gzip'))
+      ).arrayBuffer()
+    : payload;
+  if (buf.byteLength !== expectedBytes)
+    throw new Error('An anatomy file was incomplete.');
+  return buf;
+}
+
+async function main() {
+  // ---------------- data ----------------
+  const data = await (await fetch(
+    `/mb-assets/atlas/structures.json`)).json();
+  const structures = data.structures || {};
+  const systems = data.systems || {};
+  const concepts = data.concepts || {};
+  const conceptByName = {};
+  for (const c of Object.values(concepts))
+    conceptByName[(c.name || '').toLowerCase()] = c;
+  const aliases = data.aliases || {};
+  const colors = data.systemColors || {};
+  const SYSTEM_ORDER = Object.keys(systems).sort((a, b) =>
+    systems[b].length - systems[a].length);
+  // Integumentary (skin shell) starts hidden — it occludes everything.
+  const DEFAULT_HIDDEN = new Set(['integumentary']);
+
+  // ---------------- three setup ----------------
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
+  stage.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xf2f3f3);
+  const camera = new THREE.PerspectiveCamera(
+    34, stage.clientWidth / stage.clientHeight, 0.005, 100);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.085;
+  controls.minDistance = 0.07;
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xa7acb2, 1.05));
+  const key = new THREE.DirectionalLight(0xfffaf4, 2.3);
+  key.position.set(-2, 4, 3);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0xe9f0ff, 1.8);
+  rim.position.set(2, 2, -3);
+  scene.add(rim);
+
+  new ResizeObserver(() => {
+    camera.aspect = stage.clientWidth / stage.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(stage.clientWidth, stage.clientHeight);
+  }).observe(stage);
+  renderer.setSize(stage.clientWidth, stage.clientHeight);
+
+  // ---------------- model ----------------
+  const systemMats = new Map();
+  const matFor = (sys) => {
+    if (!systemMats.has(sys)) {
+      systemMats.set(sys, new THREE.MeshStandardMaterial({
+        color: colors[sys] || '#aebbb8',
+        metalness: 0.08, roughness: 0.53, side: THREE.DoubleSide,
+      }));
+    }
+    return systemMats.get(sys);
+  };
+
+  const parts = new Map(); // partId -> {mesh, part}
+  const chunks = data.chunks || [];
+  let loaded = 0;
+
+  async function loadChunk(ci) {
+    const chunk = chunks[ci];
+    const buffer = await fetchChunk(
+      `/mb-assets/${chunk.url}`, chunk.bytes);
+    for (const p of data.parts) {
+      if (p.chunk !== ci) continue;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(
+        new Float32Array(buffer, p.positions, p.vertexCount * 3), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(
+        new Int16Array(buffer, p.normals, p.vertexCount * 3), 3, true));
+      g.setIndex(new THREE.BufferAttribute(
+        new Uint32Array(buffer, p.indices, p.indexCount), 1));
+      g.boundingBox = new THREE.Box3(
+        new THREE.Vector3().fromArray(p.bounds[0]),
+        new THREE.Vector3().fromArray(p.bounds[1]));
+      g.computeBoundingSphere();
+      const mesh = new THREE.Mesh(g, matFor(p.system).clone());
+      mesh.userData.partId = p.id;
+      parts.set(p.id, { mesh, part: p });
+      scene.add(mesh);
+    }
+    loaded++;
+    overlayMsg.textContent =
+      `Loading anatomy model… ${Math.round(loaded / chunks.length * 100)}%`;
+  }
+  // 3 concurrent fetches, like upstream.
+  let cursor = 0;
+  await Promise.all(Array.from({ length: 3 }, async () => {
+    while (cursor < chunks.length) await loadChunk(cursor++);
+  }));
+  if (!parts.size) throw new Error('no parts decoded');
+
+  // ---------------- state ----------------
+  const hidden = new Set();         // dbl-click hidden part ids
+  const sysVisible = {};            // system -> bool
+  for (const s of SYSTEM_ORDER) sysVisible[s] = !DEFAULT_HIDDEN.has(s);
+  let focusIds = new Set();
+  let selected = null;
+  let query = '';
+
+  function unionBox(ids) {
+    const box = new THREE.Box3();
+    for (const id of ids) {
+      const p = parts.get(id);
+      if (p) box.union(p.mesh.geometry.boundingBox);
+    }
+    return box.isEmpty() ? null : box;
+  }
+  function frameBox(box, pad = 1.35) {
+    const c = box.getCenter(new THREE.Vector3());
+    const s = box.getSize(new THREE.Vector3());
+    const radius = Math.max(s.x, s.y, s.z) * 0.5 || 0.5;
+    const dist = (radius / Math.tan((camera.fov * Math.PI) / 360)) * pad;
+    const dir = new THREE.Vector3(0.55, 0.35, 1).normalize();
+    camera.position.copy(c).addScaledVector(dir, dist);
+    controls.target.copy(c);
+    controls.update();
+  }
+
+  function applyVisibility() {
+    const allowedSystems =
+      (PARAMS.systems || []).length ? new Set(PARAMS.systems) : null;
+    const q = query.trim().toLowerCase();
+    for (const [id, { mesh, part }] of parts) {
+      let vis = !hidden.has(id) && sysVisible[part.system];
+      if (allowedSystems && !focusIds.has(id))
+        vis = vis && allowedSystems.has(part.system);
+      if (q && searchIds) {
+        vis = vis && searchIds.has(id);
+      }
+      mesh.visible = vis;
+    }
+  }
+  let searchIds = null; // Set | null; populated through resolveFocus so
+                        // 'heart' etc. hit concepts, not just name substrings
+
+  const HIGHLIGHT = 0x6bd9c7;
+  function paint() {
+    for (const [id, { mesh }] of parts) {
+      const m = mesh.material;
+      const base = new THREE.Color(colors[parts.get(id).part.system] || '#aebbb8');
+      if (selected === id) {
+        m.color.copy(base).lerp(new THREE.Color(HIGHLIGHT), 0.8);
+        m.emissive.setHex(0x0f766e);
+      } else if (focusIds.has(id)) {
+        m.color.copy(base).lerp(new THREE.Color(HIGHLIGHT), 0.35);
+        m.emissive.setHex(0x000000);
+      } else {
+        m.color.copy(base);
+        m.emissive.setHex(0x000000);
+      }
+    }
+  }
+
+  // term -> part ids, mirroring backend scenarios._resolve_term
+  function resolveFocus(term) {
+    const t = String(term || '').trim().toLowerCase();
+    if (!t) return { ids: [] };
+    const key = t.replace(/\s+/g, '_');
+    if (parts.has(key)) return { ids: [key] };
+    const asList = (v) => v == null ? [] : (Array.isArray(v) ? v : [v]);
+    const spec = aliases[t] || aliases[key];
+    if (spec !== undefined) {
+      const out = [];
+      if (typeof spec === 'string')
+        return { ids: parts.has(spec) ? [spec] : [] };
+      for (const cid of asList(spec.concept)) {
+        const c = concepts[cid] || conceptByName[String(cid).toLowerCase()];
+        if (c) out.push(...(c.elements || []).filter((e) => parts.has(e)));
+      }
+      for (const s of asList(spec.system))
+        out.push(...(systems[s] || []).filter((e) => parts.has(e)));
+      for (const sub of asList(spec.substr))
+        for (const [id, p] of parts)
+          if ((p.name || '').toLowerCase().includes(String(sub).toLowerCase()))
+            out.push(id);
+      out.push(...asList(spec.mesh).filter((m) => parts.has(m)));
+      return { ids: [...new Set(out)] };
+    }
+    const c = conceptByName[t];
+    if (c) {
+      return { ids: [...new Set((c.elements || []).filter((e) => parts.has(e)))] };
+    }
+    const hits = [...parts.keys()].filter(
+      (id) => (parts.get(id).part.name || '').toLowerCase().includes(t));
+    if (hits.length) return { ids: hits };
+    return { ids: [], notFound: true };
+  }
+
+  // ---------------- UI ----------------
+  const chipButtons = {};
+  for (const s of SYSTEM_ORDER) {
+    const b = document.createElement('button');
+    b.textContent = s;
+    chipButtons[s] = b;
+    b.onclick = () => {
+      sysVisible[s] = !sysVisible[s];
+      b.classList.toggle('off', !sysVisible[s]);
+      applyVisibility();
+    };
+    if (!sysVisible[s]) b.classList.add('off');
+    bar.appendChild(b);
+  }
+  const search = document.createElement('input');
+  search.placeholder = 'search — e.g. heart, femur…';
+  search.oninput = () => {
+    query = search.value;
+    searchIds = query.trim()
+      ? new Set(resolveFocus(query).ids)
+      : null;
+    applyVisibility();
+  };
+  bar.appendChild(search);
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = 'reset';
+  resetBtn.onclick = () => {
+    hidden.clear(); focusIds.clear(); selected = null; query = '';
+    search.value = ''; searchIds = null;
+    for (const s of SYSTEM_ORDER) {
+      sysVisible[s] = !DEFAULT_HIDDEN.has(s);
+      chipButtons[s].classList.toggle('off', !sysVisible[s]);
+    }
+    applyVisibility(); paint();
+    frameBox(unionBox([...parts.keys()]) ||
+      new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1)));
+  };
+  bar.appendChild(resetBtn);
+
+  // ---------------- events ----------------
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  function pick(ev) {
+    const r = renderer.domElement.getBoundingClientRect();
+    pointer.set(((ev.clientX - r.left) / r.width) * 2 - 1,
+                -((ev.clientY - r.top) / r.height) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(
+      [...parts.values()].filter((p) => p.mesh.visible).map((p) => p.mesh));
+    return hits.length ? hits[0].object.userData.partId : null;
+  }
+  let downAt = 0, clickCount = 0, clickTimer = null;
+  renderer.domElement.addEventListener('pointerdown',
+    () => { downAt = performance.now(); });
+  renderer.domElement.addEventListener('pointermove', (ev) => {
+    if (ev.buttons) { tipEl.style.display = 'none'; return; }
+    const id = pick(ev);
+    if (id) {
+      tipEl.textContent = structures[id]?.name || id;
+      tipEl.style.display = 'block';
+      tipEl.style.left = ev.clientX + 12 + 'px';
+      tipEl.style.top = ev.clientY + 14 + 'px';
+    } else tipEl.style.display = 'none';
+  });
+  renderer.domElement.addEventListener('pointerup', (ev) => {
+    if (performance.now() - downAt > 350) return; // was a drag
+    clickCount++;
+    setTimeout(() => {
+      const id = pick(ev);
+      if (clickCount >= 2 && id) {          // dbl-click: peel part away
+        hidden.add(id); applyVisibility();
+      } else if (clickCount === 1 && id) {  // click: select + frame
+        selected = selected === id ? null : id;
+        paint();
+        if (selected) {
+          const box = unionBox([id]);
+          if (box) frameBox(box, 2.2);
+        }
+      }
+      clickCount = 0;
+    }, 240);
+  });
+
+  // ---------------- focus from params ----------------
+  const f = resolveFocus(PARAMS.focus);
+  focusIds = new Set(f.ids);
+  if (f.notFound)
+    statusEl.textContent = `"${PARAMS.focus}" not in model`;
+  else
+    statusEl.textContent = 'drag to orbit · dbl-click hides a part';
+  statusEl.title = 'Anatomy data: BodyParts3D 4.0, CC BY 4.0';
+  if (PARAMS.isolate && f.ids.length) {
+    for (const [id] of parts) {
+      if (!focusIds.has(id)) hidden.add(id);
+    }
+  }
+  if (PARAMS.focus) {
+    document.getElementById('title').textContent =
+      'Anatomy 3D — ' + String(PARAMS.focus);
+  }
+  applyVisibility();
+  paint();
+  frameBox(unionBox(f.ids.length ? f.ids : [...parts.keys()]) ||
+    new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1)));
+
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.remove(), 350);
+
+  renderer.setAnimationLoop(() => {
+    controls.update();
+    renderer.render(scene, camera);
+  });
+}
+
+main().catch((e) => fail(e.message || String(e)));
+</script>
+</body>
+</html>

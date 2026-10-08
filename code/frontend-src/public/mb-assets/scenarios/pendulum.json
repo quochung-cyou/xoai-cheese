@@ -1,0 +1,9 @@
+{
+  "match": "a swinging pendulum — string + bob hanging from a pivot",
+  "params": "{\"length_m\": number, \"gravity\": 9.81, \"angle_deg\": number} — infer from labels; defaults 1.0m, 20°",
+  "param_defaults": {
+    "length_m": 1,
+    "gravity": 9.81,
+    "angle_deg": 20
+  }
+}

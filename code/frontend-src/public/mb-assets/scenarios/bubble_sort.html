@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head><script>
+addEventListener('error', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var t=(e&&e.message)||'Script failed to load';
+    var f=(e&&e.filename)||'';
+    if(m) m.textContent=f?t+' \u2014 '+f:t;
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+}, true);
+addEventListener('unhandledrejection', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var r=e&&e.reason;
+    var t=(r&&(r.message||r))||'Request failed';
+    if(m) m.textContent=String(t);
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+});
+</script>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body { font-family: ui-monospace, monospace; background: #f8fafc; color: #0f172a;
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header { padding: 8px 12px; font-size: 12px; font-weight: 700; color: #4f46e5;
+           border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
+  #status { margin-left: auto; font-size: 10px; color: #64748b; font-weight: 400; }
+  #stage { flex: 1; position: relative; }
+  canvas { position: absolute; inset: 0; }
+  #controls { padding: 8px 12px; border-top: 1px solid #e2e8f0; background: #fff;
+              display: flex; align-items: center; gap: 12px; font-size: 11px; flex-wrap: wrap; }
+  button { background: #4f46e5; color: #fff; border: 0; border-radius: 6px;
+           padding: 4px 12px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  button.ghost { background: #e2e8f0; color: #334155; }
+  label { display: flex; align-items: center; gap: 6px; color: #475569; }
+  input[type=range] { width: 90px; }
+  input[type=text] { width: 150px; border: 1px solid #cbd5e1; border-radius: 6px;
+                     padding: 3px 6px; font-family: inherit; font-size: 11px; }
+  .val { color: #4f46e5; font-weight: 700; }
+</style>
+</head>
+<body>
+<header>Bubble Sort<span id="status">ready</span></header>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="controls">
+  <button id="play">Play</button>
+  <button id="reset" class="ghost">Reset</button>
+  <label>Speed <input id="speed" type="range" min="1" max="20" value="6"><span class="val" id="speedV">6</span></label>
+  <label>Array <input id="arr" type="text"></label>
+  <button id="apply" class="ghost">Apply</button>
+</div>
+<script>
+const PARAMS = __PARAMS__;
+const DEFAULT_ARR = Array.isArray(PARAMS.array) && PARAMS.array.length >= 2
+  ? PARAMS.array.map(Number).filter(Number.isFinite)
+  : [5, 2, 8, 1, 9, 4];
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const status = document.getElementById('status');
+let arr, steps, stepIdx, playing = false, timer = null, delay = 160;
+
+// Precompute every swap step so playback is a simple cursor walk.
+function computeSteps(a) {
+  const s = [{ arr: a.slice(), i: -1, j: -1, swapped: false, sortedUpto: a.length }];
+  const b = a.slice(); const n = b.length;
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = 0; j < n - 1 - i; j++) {
+      const swapped = b[j] > b[j + 1];
+      if (swapped) { const t = b[j]; b[j] = b[j + 1]; b[j + 1] = t; }
+      s.push({ arr: b.slice(), i, j, swapped, sortedUpto: n - i });
+    }
+  }
+  s.push({ arr: b.slice(), i: -1, j: -1, swapped: false, sortedUpto: 0 });
+  return s;
+}
+
+function reset() {
+  arr = DEFAULT_ARR.slice();
+  steps = computeSteps(arr);
+  stepIdx = 0;
+  stop();
+  status.textContent = 'ready';
+  document.getElementById('arr').value = arr.join(', ');
+  draw();
+}
+
+function draw() {
+  const w = cv.width, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  const st = steps[stepIdx];
+  const a = st.arr, n = a.length, max = Math.max(...a, 1);
+  const bw = Math.min(60, (w - 40) / n), gap = 6;
+  const x0 = (w - n * (bw + gap) + gap) / 2;
+  for (let k = 0; k < n; k++) {
+    const bh = (a[k] / max) * (h - 70);
+    const x = x0 + k * (bw + gap), y = h - 40 - bh;
+    let fill = '#4f46e5';
+    if (k >= st.sortedUpto) fill = '#10b981';            // settled tail
+    else if (k === st.j || k === st.j + 1) fill = st.swapped ? '#ef4444' : '#f59e0b';
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.roundRect(x, y, bw, bh, 4);
+    ctx.fill();
+    ctx.fillStyle = '#475569'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(a[k], x + bw / 2, h - 24);
+  }
+  const pct = Math.round((stepIdx / (steps.length - 1)) * 100);
+  status.textContent = stepIdx >= steps.length - 1
+    ? `sorted — ${steps.length - 1} comparisons`
+    : `step ${stepIdx}/${steps.length - 1} (${pct}%)`;
+}
+
+function tick() {
+  if (stepIdx >= steps.length - 1) { stop(); return; }
+  stepIdx++;
+  draw();
+}
+function play() { if (playing) return; playing = true;
+  document.getElementById('play').textContent = 'Pause';
+  timer = setInterval(tick, delay); }
+function stop() { playing = false;
+  document.getElementById('play').textContent = 'Play';
+  clearInterval(timer); }
+
+function resize() {
+  const r = document.getElementById('stage').getBoundingClientRect();
+  cv.width = r.width; cv.height = r.height; draw();
+}
+
+document.getElementById('play').onclick = () => playing ? stop() : play();
+document.getElementById('reset').onclick = reset;
+document.getElementById('speed').oninput = (e) => {
+  delay = 220 - Number(e.target.value) * 10;
+  document.getElementById('speedV').textContent = e.target.value;
+  if (playing) { clearInterval(timer); timer = setInterval(tick, delay); }
+};
+document.getElementById('apply').onclick = () => {
+  const v = document.getElementById('arr').value.split(/[,\s]+/).map(Number).filter(Number.isFinite);
+  if (v.length >= 2) { DEFAULT_ARR.length = 0; DEFAULT_ARR.push(...v); reset(); }
+};
+window.addEventListener('resize', resize);
+reset(); resize();
+</script>
+</body>
+</html>

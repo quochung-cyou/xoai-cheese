@@ -1,0 +1,9 @@
+{
+  "match": "a resistor + capacitor / RC charging circuit",
+  "params": "{\"V\": number, \"R\": number, \"C\": number} — infer from labels; defaults 10V, 10Ω, 0.5F",
+  "param_defaults": {
+    "V": 10,
+    "R": 10,
+    "C": 0.5
+  }
+}

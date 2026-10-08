@@ -1,0 +1,27 @@
+{
+  "match": "a convolutional pipeline — convolution/CNN: image grid, kernel/filter sliding window, feature map, ReLU, flatten into dense layers ending in a class prediction (e.g. cat vs dog)",
+  "params": "{\"image\": 6x6 grayscale 0..1, \"kernel\": 3x3, \"output_labels\": [\"Cat\", \"Dog\"]} — read grid/kernel values from the sketch; if unreadable omit image and a plausible 6x6 patch is synthesized",
+  "param_defaults": {
+    "kernel": [
+      [
+        1,
+        0,
+        -1
+      ],
+      [
+        1,
+        0,
+        -1
+      ],
+      [
+        1,
+        0,
+        -1
+      ]
+    ],
+    "output_labels": [
+      "Cat",
+      "Dog"
+    ]
+  }
+}

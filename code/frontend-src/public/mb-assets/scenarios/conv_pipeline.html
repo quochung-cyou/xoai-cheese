@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head><script>
+addEventListener('error', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var t=(e&&e.message)||'Script failed to load';
+    var f=(e&&e.filename)||'';
+    if(m) m.textContent=f?t+' \u2014 '+f:t;
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+}, true);
+addEventListener('unhandledrejection', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var r=e&&e.reason;
+    var t=(r&&(r.message||r))||'Request failed';
+    if(m) m.textContent=String(t);
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+});
+</script>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body { font-family: ui-monospace, monospace; background: #f8fafc; color: #0f172a;
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header { padding: 8px 12px; font-size: 12px; font-weight: 700; color: #4f46e5;
+           border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
+  #title2 { font-weight: 400; color: #64748b; }
+  #status { margin-left: auto; font-size: 10px; color: #64748b; font-weight: 400; }
+  #stage { flex: 1; position: relative; }
+  canvas { position: absolute; inset: 0; }
+  #controls { padding: 8px 12px; border-top: 1px solid #e2e8f0; background: #fff;
+              display: flex; align-items: center; gap: 14px; font-size: 11px; flex-wrap: wrap; }
+  button { background: #4f46e5; color: #fff; border: 0; border-radius: 6px;
+           padding: 4px 12px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  button.ghost { background: #e2e8f0; color: #334155; }
+  label { display: flex; align-items: center; gap: 6px; color: #475569; }
+  input[type=range] { width: 90px; }
+  .val { color: #4f46e5; font-weight: 700; min-width: 24px; }
+</style>
+</head>
+<body>
+<header>Convolution Pipeline <span id="title2">conv → ReLU → flatten → dense</span><span id="status">ready</span></header>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="controls">
+  <button id="play">Play</button>
+  <button id="reset" class="ghost">Reset</button>
+  <label>Speed <input id="speed" type="range" min="1" max="20" value="10"><span class="val" id="speedV">10</span></label>
+</div>
+<script>
+const PARAMS = __PARAMS__;
+
+// ---------- params ----------
+function rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function grid2(v) {
+  return Array.isArray(v) && v.length >= 2 && v.every(r => Array.isArray(r) && r.length >= 2)
+    ? v.map(r => r.map(x => Math.min(1, Math.max(0, Number(x) || 0)))) : null;
+}
+let IMG = grid2(PARAMS.image);
+if (!IMG) { // synthesize like the scene: seed 2, brighter toward the right
+  const r = rng(2), N = 6;
+  IMG = Array.from({ length: N }, (_, i) =>
+    Array.from({ length: N }, (_, j) =>
+      Math.min(1, Math.max(0, 0.35 + 0.65 * r() + 0.25 * j / (N - 1)))));
+}
+const IH = IMG.length, IW = IMG[0].length;
+let K = Array.isArray(PARAMS.kernel) && PARAMS.kernel.length &&
+        PARAMS.kernel.every(r => Array.isArray(r) && r.length)
+  ? PARAMS.kernel.map(r => r.map(x => Math.max(-1, Math.min(1, Number(x) || 0)))) : null;
+if (!K || K.length > IH || K[0].length > IW)
+  K = [[1, 0, -1], [1, 0, -1], [1, 0, -1]];
+const KH = K.length, KW = K[0].length;
+const OH = IH - KH + 1, OW = IW - KW + 1;
+const LABELS = Array.isArray(PARAMS.output_labels) && PARAMS.output_labels.length
+  ? PARAMS.output_labels.map(String) : ['Cat', 'Dog'];
+
+// feature map values (valid convolution)
+const FEAT = Array.from({ length: OH }, (_, i) =>
+  Array.from({ length: OW }, (_, j) => {
+    let s = 0;
+    for (let a = 0; a < KH; a++) for (let b = 0; b < KW; b++) s += IMG[i + a][j + b] * K[a][b];
+    return s;
+  }));
+let fmin = Math.min(...FEAT.flat()), fmax = Math.max(...FEAT.flat());
+if (fmax === fmin) { fmin -= 1; fmax += 1; }
+const NCELLS = OH * OW;
+
+// dense sizes mirroring the scene (hidden fixed at 6, output = labels)
+const HID = 6, OUT = Math.max(1, LABELS.length);
+const randW = rng(3);                       // np.random.seed(3)
+const W_HO = Array.from({ length: HID }, () => Array.from({ length: OUT }, randW));
+const HID_ACTS = Array.from({ length: HID }, (_, i) => HID > 1 ? 0.2 + 0.8 * i / (HID - 1) : 1);
+const OUT_SCORES = W_HO[0].map((_, j) =>
+  W_HO.reduce((s, row, i) => s + row[j] * HID_ACTS[i], 0));
+const OUT_IDX = OUT_SCORES.indexOf(Math.max(...OUT_SCORES));
+
+// input activations = ReLU'd + normalized flattened feature map
+const FLAT = FEAT.flat().map(v => Math.max(0, v));
+const fMax = Math.max(...FLAT);
+const IN_ACTS = fMax > 0 ? FLAT.map(v => v / fMax) : FLAT.map(() => 0);
+
+// ---------- canvas ----------
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const status = document.getElementById('status');
+let playing = false, raf = null, t = 0, last = 0, speed = 1;
+
+// Timeline (Manim timing kept roughly, scan shortened by speed anyway):
+const SEGS = [
+  { name: 'in', dur: 0.7 }, { name: 'window', dur: 0.35 },
+  { name: 'scan', dur: NCELLS * 0.34 }, { name: 'relu', dur: 0.7 },
+  { name: 'flatten', dur: 1.5 }, { name: 'nodes', dur: 0.7 },
+  { name: 'edges', dur: 0.9 }, { name: 'labels', dur: 0.4 },
+  { name: 'pred', dur: 0.7 }, { name: 'end', dur: 1.6 },
+];
+const TOTAL = SEGS.reduce((s, x) => s + x.dur, 0);
+function segAt(tt) {
+  let acc = 0;
+  for (const s of SEGS) {
+    if (tt < acc + s.dur) return { s, p: (tt - acc) / s.dur };
+    acc += s.dur;
+  }
+  return { s: SEGS[SEGS.length - 1], p: 1 };
+}
+const clamp01 = x => Math.min(1, Math.max(0, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+function lerpHex(h1, h2, k) {
+  const a = parseInt(h1.slice(1), 16), b = parseInt(h2.slice(1), 16);
+  return `rgb(${lerp(a >> 16, b >> 16, k) | 0},${lerp(a >> 8 & 255, b >> 8 & 255, k) | 0},${lerp(a & 255, b & 255, k) | 0})`;
+}
+const gray = v => lerpHex('#0f172a', '#f8fafc', v);          // BLACK->WHITE image
+const featCol = v => lerpHex('#4f46e5', '#f59e0b', clamp01((v - fmin) / (fmax - fmin))); // BLUE->YELLOW
+const kernCol = v => lerpHex('#4f46e5', '#f59e0b', (v + 1) / 2);
+const actCol = a => lerpHex('#4f46e5', '#f59e0b', clamp01(a));
+
+// ---------- layout ----------
+function layout() {
+  const w = cv.width, h = cv.height;
+  const cs = Math.min(h * 0.62 / IH, w * 0.2 / IW, 46);       // image cell px
+  const kcs = Math.min(cs * 0.6, 30);                          // kernel cell px
+  const y0 = h * 0.32;                                         // conv row center-y
+  const ix = w * 0.44, fy = w * 0.8 - OW * cs / 2, fx = w * 0.8; // panels
+  const kx = w * 0.13;
+  // dense columns
+  const dx = [w * 0.28, w * 0.56, w * 0.8];
+  const dSpan = h * 0.6;
+  const colYs = n => n === 1 ? [h * 0.45]
+    : Array.from({ length: n }, (_, j) => h * 0.45 - dSpan / 2 + j * dSpan / (n - 1));
+  const inYs = colYs(NCELLS), hidYs = colYs(HID), outYs = colYs(OUT);
+  const nr = { in: Math.max(5, Math.min(11, dSpan / (NCELLS * 1.6))),
+               hid: Math.max(8, Math.min(13, dSpan / (HID * 1.8))),
+               out: Math.max(10, Math.min(16, dSpan / (OUT * 2.4))) };
+  return { w, h, cs, kcs, y0, kx, ix, fx, dx, inYs, hidYs, outYs, nr };
+}
+// top-left of a grid centered at (cx, cy)
+const g0 = (cx, cy, n, cs, m) => [cx - m * cs / 2, cy - n * cs / 2];
+
+function cellRect(cx, cy, n, m, cs, i, j) {
+  const [x0, y0] = g0(cx, cy, n, cs, m);
+  return [x0 + j * cs, y0 + i * cs, cs];
+}
+const cellC = (cx, cy, n, m, cs, i, j) => {
+  const [x, y] = cellRect(cx, cy, n, m, cs, i, j);
+  return [x + cs / 2, y + cs / 2];
+};
+
+function drawGrid(cx, cy, vals, cs, colorFn, alpha, showNums, filledMask) {
+  const n = vals.length, m = vals[0].length;
+  ctx.globalAlpha = alpha;
+  for (let i = 0; i < n; i++) for (let j = 0; j < m; j++) {
+    const [x, y] = cellRect(cx, cy, n, m, cs, i, j);
+    const fill = filledMask && !filledMask(i, j) ? '#f1f5f9' : colorFn(vals[i][j], i, j);
+    ctx.fillStyle = fill; ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+    ctx.fillRect(x, y, cs, cs); ctx.strokeRect(x, y, cs, cs);
+    if (showNums) {
+      ctx.fillStyle = '#0f172a'; ctx.font = `${Math.max(9, cs * 0.36)}px monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(vals[i][j].toFixed(1), x + cs / 2, y + cs / 2);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---------- draw ----------
+function draw() {
+  const { w, h, cs, kcs, y0, kx, ix, fx, dx, inYs, hidYs, outYs, nr } = layout();
+  ctx.clearRect(0, 0, w, h);
+  const { s, p } = segAt(t);
+  const ease = clamp01(p);
+  const convStage = ['in', 'window', 'scan', 'relu'].includes(s.name);
+  const flatStage = s.name === 'flatten';
+  const convA = convStage ? (s.name === 'in' ? ease : 1)
+    : flatStage ? clamp01(2 * (1 - p))  // grids fade during 2nd half of flatten
+    : 0;
+
+  // ============ Part 1: convolution ============
+  if (convA > 0) {
+    // kernel panel
+    drawGrid(kx, y0 - 10, K, kcs, kernCol, convA, true);
+    ctx.globalAlpha = convA; ctx.fillStyle = '#475569';
+    ctx.font = '11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(`Filter ${KH}x${KW}`, kx, y0 - 10 + KH * kcs / 2 + 10);
+    // input image
+    drawGrid(ix, y0, IMG, cs, gray, convA);
+    ctx.fillText('Input image', ix, y0 + IH * cs / 2 + 10);
+    // feature map — cells fill as scanned, black where ReLU clamps
+    let scanned = 0;
+    if (s.name === 'scan') scanned = Math.floor(p * NCELLS + 0.0001);
+    else if (s.name !== 'in' && s.name !== 'window') scanned = NCELLS;
+    // ReLU clamps negatives one-by-one in row order, like the per-cell loop
+    const reluP = s.name === 'relu' ? p : (convStage ? 0 : 1);
+    drawGrid(fx, y0, FEAT, cs,
+      (v, i, j) => v < 0 && i * OW + j < reluP * NCELLS ? '#0f172a' : featCol(v),
+      convA, false, (i, j) => i * OW + j < scanned);
+    ctx.fillText('Feature map', fx, y0 + OH * cs / 2 + 10);
+    ctx.globalAlpha = 1;
+
+    // sliding window
+    if (s.name === 'window' || s.name === 'scan' || s.name === 'relu') {
+      const cur = s.name === 'scan' ? Math.min(Math.floor(p * NCELLS), NCELLS - 1) : 0;
+      const i = Math.floor(cur / OW), j = cur % OW;
+      // interpolate during move sub-phase for smooth slide
+      let ci = i, cj = j;
+      if (s.name === 'scan') {
+        const sub = (p * NCELLS) % 1;
+        if (sub < 0.65 && cur > 0) {           // moving: 0.22/0.34 of each step
+          const pr = cur - 1, pi = Math.floor(pr / OW), pj = pr % OW;
+          const k = sub / 0.65;
+          ci = lerp(pi, i, k); cj = lerp(pj, j, k);
+        }
+      }
+      const [x1, y1] = cellC(ix, y0, IH, IW, cs, ci, cj);
+      const [x2, y2] = cellC(ix, y0, IH, IW, cs, ci + KH - 1, cj + KW - 1);
+      ctx.globalAlpha = s.name === 'window' ? ease : convA;
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3;
+      ctx.strokeRect(x1 - cs / 2 - 2, y1 - cs / 2 - 2, x2 - x1 + cs + 4, y2 - y1 + cs + 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ============ Part 2: dense ============
+  const denseA = flatStage ? 1 : convStage ? 0 : 1;
+  if (denseA > 0) {
+    // flat/input nodes: fly from feature cells during flatten
+    for (let k = 0; k < NCELLS; k++) {
+      const fi = Math.floor(k / OW), fj = k % OW;
+      const [sx, sy] = cellC(fx, y0, OH, OW, cs, fi, fj);
+      const fly = flatStage ? clamp01((p * NCELLS * 1.15 - k) ) : 1; // lagged start per node
+      const pk = flatStage ? clamp01(fly / 0.35) : 1;               // each takes ~35% of slot
+      const x = lerp(sx, dx[0], pk), y = lerp(sy, inYs[k], pk);
+      if (flatStage && pk <= 0) continue;
+      ctx.globalAlpha = flatStage ? clamp01(fly * 3) : denseA;
+      ctx.fillStyle = actCol(IN_ACTS[k]); ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x, y, nr.in, 0, 7); ctx.fill(); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // "Flattened inputs" under the input column (once dense is up)
+    if (!flatStage) {
+      const la = s.name === 'nodes' ? ease : 1;
+      ctx.globalAlpha = la;
+      ctx.fillStyle = '#475569'; ctx.font = '12px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText('Flattened inputs', dx[0], Math.max(...inYs) + nr.in + 10);
+      ctx.globalAlpha = 1;
+    }
+    // hidden + output nodes
+    if (!flatStage && s.name !== 'in') {
+      const na = s.name === 'nodes' ? ease : 1;
+      ctx.globalAlpha = na;
+      for (let i = 0; i < HID; i++) {
+        ctx.fillStyle = actCol(HID_ACTS[i]); ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(dx[1], hidYs[i], nr.hid, 0, 7); ctx.fill(); ctx.stroke();
+      }
+      for (let j = 0; j < OUT; j++) {
+        ctx.fillStyle = '#334155'; ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(dx[2], outYs[j], nr.out, 0, 7); ctx.fill(); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // edges: ih grows first ~55%, then ho
+    if (s.name === 'edges' || s.name === 'labels' || s.name === 'pred' || s.name === 'end') {
+      const kIh = s.name === 'edges' ? clamp01(p / 0.55) : 1;
+      const kHo = s.name === 'edges' ? clamp01((p - 0.55) / 0.45) : 1;
+      const edge = (x1, y1, x2, y2, r1, r2, a, k) => {
+        ctx.strokeStyle = lerpHex('#94a3b8', '#f59e0b', clamp01(a));
+        ctx.globalAlpha = lerp(0.35, 0.95, a); ctx.lineWidth = lerp(1, 5, a);
+        ctx.beginPath(); ctx.moveTo(x1 + r1, y1);
+        ctx.lineTo(lerp(x1 + r1, x2 - r2, k), y2); ctx.stroke();
+      };
+      for (let i = 0; i < NCELLS; i++)
+        for (let j = 0; j < HID; j++)
+          edge(dx[0], inYs[i], dx[1], hidYs[j], nr.in, nr.hid, IN_ACTS[i] * HID_ACTS[j], kIh);
+      for (let i = 0; i < HID; i++)
+        for (let j = 0; j < OUT; j++)
+          edge(dx[1], hidYs[i], dx[2], outYs[j], nr.hid, nr.out, W_HO[i][j], kHo);
+      ctx.globalAlpha = 1;
+    }
+    // output labels
+    if (s.name === 'labels' || s.name === 'pred' || s.name === 'end') {
+      const la = s.name === 'labels' ? ease : 1;
+      ctx.globalAlpha = la;
+      ctx.fillStyle = '#334155'; ctx.font = '14px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      for (let j = 0; j < OUT; j++)
+        ctx.fillText(LABELS[j], dx[2] + nr.out + 10, outYs[j]);
+      ctx.globalAlpha = 1;
+    }
+    // prediction: green box on winner + text next to 'Flattened inputs'
+    if (s.name === 'pred' || s.name === 'end') {
+      const pa = s.name === 'pred' ? ease : 1;
+      ctx.globalAlpha = pa;
+      const ox = dx[2], oy = outYs[OUT_IDX], R = nr.out + 5;
+      ctx.strokeStyle = '#10b981'; ctx.lineWidth = 4;
+      ctx.strokeRect(ox - R, oy - R, 2 * R, 2 * R);
+      const txt = `Prediction: ${LABELS[OUT_IDX]}`;
+      ctx.font = 'bold 14px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      const tx = dx[0] + ctx.measureText('Flattened inputs').width / 2 + 18;
+      const ty = Math.max(...inYs) + nr.in + 16;
+      const tw = ctx.measureText(txt).width;
+      ctx.fillStyle = 'rgba(16,185,129,0.15)';
+      ctx.fillRect(tx - 5, ty - 11, tw + 10, 22);
+      ctx.fillStyle = '#10b981';
+      ctx.fillText(txt, tx, ty);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- caption + status ----------
+  let cap = '';
+  if (s.name === 'scan' || s.name === 'window') cap = 'Slide, multiply, sum';
+  else if (s.name === 'relu') cap = 'ReLU: negatives to 0';
+  else if (flatStage) cap = 'Flatten to vector';
+  if (cap) {
+    ctx.fillStyle = '#64748b'; ctx.font = '13px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(cap, w / 2, h - 14);
+  }
+  if (convStage) status.textContent = `convolution: ${KH}x${KW} filter → ${OW}x${OH} feature map`;
+  else if (flatStage) status.textContent = 'flattening to vector…';
+  else if (s.name === 'pred' || s.name === 'end')
+    status.textContent = `done — predicted ${LABELS[OUT_IDX]}`;
+  else status.textContent = 'dense layers';
+}
+
+function frame(ts) {
+  if (!playing) return;
+  const dt = Math.min((ts - last) / 1000, 0.05) * speed; last = ts;
+  t = Math.min(t + dt, TOTAL);
+  draw();
+  if (t >= TOTAL) { stop(); return; }
+  raf = requestAnimationFrame(frame);
+}
+function play() {
+  if (playing) return;
+  if (t >= TOTAL) t = 0;
+  playing = true; document.getElementById('play').textContent = 'Pause';
+  last = performance.now(); raf = requestAnimationFrame(frame);
+}
+function stop() {
+  playing = false; document.getElementById('play').textContent = 'Play';
+  cancelAnimationFrame(raf);
+}
+function reset() { stop(); t = 0; draw(); }
+function resize() {
+  const r = document.getElementById('stage').getBoundingClientRect();
+  cv.width = r.width; cv.height = r.height; draw();
+}
+
+document.getElementById('play').onclick = () => playing ? stop() : play();
+document.getElementById('reset').onclick = reset;
+document.getElementById('speed').oninput = (e) => {
+  speed = Number(e.target.value) / 10;
+  document.getElementById('speedV').textContent = e.target.value;
+};
+window.addEventListener('resize', resize);
+reset(); resize();
+</script>
+</body>
+</html>

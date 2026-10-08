@@ -1,0 +1,17 @@
+{
+  "match": "a list/array of numbers to sort (bars, \"sort\", \"bubble sort\", sequence of values)",
+  "params": "{\"array\": [5, 2, 8, ...]} — read values from the sketch; if unreadable use 6-9 plausible small integers",
+  "required_params": [
+    "array"
+  ],
+  "param_defaults": {
+    "array": [
+      5,
+      2,
+      8,
+      1,
+      9,
+      4
+    ]
+  }
+}

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head><script>
+addEventListener('error', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var t=(e&&e.message)||'Script failed to load';
+    var f=(e&&e.filename)||'';
+    if(m) m.textContent=f?t+' \u2014 '+f:t;
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+}, true);
+addEventListener('unhandledrejection', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var r=e&&e.reason;
+    var t=(r&&(r.message||r))||'Request failed';
+    if(m) m.textContent=String(t);
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+});
+</script>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body { font-family: ui-monospace, monospace; background: #f8fafc; color: #0f172a;
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header { padding: 8px 12px; font-size: 12px; font-weight: 700; color: #4f46e5;
+           border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
+  #status { margin-left: auto; font-size: 10px; color: #64748b; font-weight: 400; }
+  #stage { flex: 1; position: relative; }
+  canvas { position: absolute; inset: 0; }
+  #controls { padding: 8px 12px; border-top: 1px solid #e2e8f0; background: #fff;
+              display: flex; align-items: center; gap: 14px; font-size: 11px; flex-wrap: wrap; }
+  button { background: #4f46e5; color: #fff; border: 0; border-radius: 6px;
+           padding: 4px 12px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  button.ghost { background: #e2e8f0; color: #334155; }
+  label { display: flex; align-items: center; gap: 6px; color: #475569; }
+  input[type=range] { width: 90px; }
+  .val { color: #4f46e5; font-weight: 700; min-width: 24px; }
+</style>
+</head>
+<body>
+<header>Simple Neural Network<span id="status">ready</span></header>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="controls">
+  <button id="play">Play</button>
+  <button id="reset" class="ghost">Reset</button>
+  <label>Speed <input id="speed" type="range" min="1" max="20" value="10"><span class="val" id="speedV">10</span></label>
+  <label>Threshold <input id="thr" type="range" min="0" max="60" value="20"><span class="val" id="thrV">0.20</span></label>
+</div>
+<script>
+const PARAMS = __PARAMS__;
+function arr(v, d) {
+  return Array.isArray(v) && v.length >= 1
+    ? v.map(x => Math.min(1, Math.max(0, Number(x) || 0))) : d.slice();
+}
+const INPUT  = arr(PARAMS.input_activations,  [0.9, 0.2, 0.7, 0.1]);
+const HIDDEN = arr(PARAMS.hidden_activations, [0.6, 0.3, 0.8, 0.4, 0.2]);
+const OUTPUT = arr(PARAMS.output_activations, [0.7, 0.3]);
+const LAYERS = [INPUT, HIDDEN, OUTPUT];
+const LABELS = Array.isArray(PARAMS.output_labels) && PARAMS.output_labels.length
+  ? PARAMS.output_labels.map(String) : ['Cat', 'Dog'];
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const status = document.getElementById('status');
+let playing = false, raf = null, t = 0, last = 0, speed = 1, thr = 0.2;
+
+// Timeline mirroring the Manim scene: hold -> per-layer highlight sweep
+// -> fade -> prediction callout -> hold.
+const SEGS = [{ name: 'hold', dur: 0.6 }];
+for (let l = 0; l < LAYERS.length - 1; l++) {
+  SEGS.push({ name: 'hl', layer: l, dur: 0.9 });
+  SEGS.push({ name: 'wait', dur: 0.35 });
+  SEGS.push({ name: 'hlout', layer: l, dur: 0.5 });
+}
+SEGS.push({ name: 'pred', dur: 0.8 });
+SEGS.push({ name: 'end', dur: 1.6 });
+const TOTAL = SEGS.reduce((s, x) => s + x.dur, 0);
+
+function segAt(tt) {
+  let acc = 0;
+  for (const s of SEGS) {
+    if (tt < acc + s.dur) return { s, p: (tt - acc) / s.dur };
+    acc += s.dur;
+  }
+  return { s: SEGS[SEGS.length - 1], p: 1 };
+}
+const clamp01 = x => Math.min(1, Math.max(0, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+
+function lerpHex(h1, h2, k) {
+  const a = parseInt(h1.slice(1), 16), b = parseInt(h2.slice(1), 16);
+  const r = lerp(a >> 16, b >> 16, k), g = lerp(a >> 8 & 255, b >> 8 & 255, k),
+        bl = lerp(a & 255, b & 255, k);
+  return `rgb(${r | 0},${g | 0},${bl | 0})`;
+}
+const nodeFill = a => lerpHex('#4f46e5', '#f59e0b', a);   // BLUE -> YELLOW
+const edgeCol  = a => lerpHex('#94a3b8', '#f59e0b', a);   // GREY -> YELLOW
+
+// Geometry: nodes centered per layer, evenly spaced like np.linspace.
+function layout() {
+  const w = cv.width, h = cv.height;
+  const nL = LAYERS.length;
+  const marginX = Math.max(70, w * 0.16);
+  const maxN = Math.max(...LAYERS.map(a => a.length));
+  const r = Math.max(14, Math.min(30, h / (maxN * 2.6), w / (nL * 5)));
+  const xs = LAYERS.map((_, i) =>
+    nL === 1 ? w / 2 : marginX + i * (w - 2 * marginX) / (nL - 1));
+  const span = h * 0.7;
+  const ys = LAYERS.map(a => {
+    if (a.length === 1) return [h / 2];
+    const top = h / 2 - span / 2 * Math.min(1, (a.length - 1) / (maxN - 1 || 1));
+    const bot = h / 2 + span / 2 * Math.min(1, (a.length - 1) / (maxN - 1 || 1));
+    return a.map((_, j) => top + j * (bot - top) / (a.length - 1));
+  });
+  return { xs, ys, r };
+}
+
+function draw() {
+  const w = cv.width, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  const { xs, ys, r } = layout();
+  const { s, p } = segAt(t);
+  const ease = clamp01(p * 1.15); // Create()-style grow within segment
+
+  // --- base edges: thickness/color ~ from_act * to_act ---
+  for (let l = 0; l < LAYERS.length - 1; l++) {
+    for (let i = 0; i < LAYERS[l].length; i++) {
+      for (let j = 0; j < LAYERS[l + 1].length; j++) {
+        const a = LAYERS[l][i] * LAYERS[l + 1][j];
+        ctx.strokeStyle = edgeCol(a);
+        ctx.globalAlpha = lerp(0.35, 0.95, a);
+        ctx.lineWidth = lerp(1, 6, a);
+        ctx.beginPath();
+        ctx.moveTo(xs[l] + r, ys[l][i]);
+        ctx.lineTo(xs[l + 1] - r, ys[l + 1][j]);
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // --- forward-prop highlight sweep ---
+  // 'hl': edges grow in; 'wait': steady; 'hlout': fading; 'pred'/'end': gone.
+  let hlLayer = -1, hlAlpha = 0, hlGrow = 0;
+  if (s.name === 'hl')        { hlLayer = s.layer; hlGrow = ease;      hlAlpha = 0.85; }
+  else if (s.name === 'wait') { hlLayer = prevHl();                    hlGrow = 1;     hlAlpha = 0.85; }
+  else if (s.name === 'hlout'){ hlLayer = s.layer; hlGrow = 1;         hlAlpha = 0.85 * (1 - ease); }
+  if (hlLayer >= 0) {
+    const l = hlLayer;
+    for (let i = 0; i < LAYERS[l].length; i++) {
+      for (let j = 0; j < LAYERS[l + 1].length; j++) {
+        if (LAYERS[l][i] * LAYERS[l + 1][j] <= thr) continue;
+        const x1 = xs[l] + r, y1 = ys[l][i],
+              x2 = xs[l + 1] - r, y2 = ys[l + 1][j];
+        ctx.strokeStyle = '#f59e0b'; ctx.globalAlpha = hlAlpha; ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(lerp(x1, x2, hlGrow), lerp(y1, y2, hlGrow));
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // --- nodes + activation text ---
+  for (let l = 0; l < LAYERS.length; l++) {
+    for (let j = 0; j < LAYERS[l].length; j++) {
+      const a = LAYERS[l][j];
+      ctx.fillStyle = nodeFill(a);
+      ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(xs[l], ys[l][j], r, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = a > 0.55 ? '#0f172a' : '#f8fafc';
+      ctx.font = `${Math.max(10, r * 0.62)}px monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(a.toFixed(1), xs[l], ys[l][j]);
+    }
+  }
+
+  // node rings during highlight of the *target* layer
+  if (hlLayer >= 0) {
+    for (let j = 0; j < LAYERS[hlLayer + 1].length; j++) {
+      if (LAYERS[hlLayer + 1][j] <= thr) continue;
+      ctx.strokeStyle = '#f59e0b'; ctx.globalAlpha = hlAlpha; ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(xs[hlLayer + 1], ys[hlLayer + 1][j], r + 3, -Math.PI / 2,
+              -Math.PI / 2 + hlGrow * Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // --- output labels ---
+  const outL = LAYERS.length - 1;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#334155'; ctx.font = '14px monospace';
+  for (let j = 0; j < LAYERS[outL].length; j++) {
+    ctx.fillText(LABELS[j] || `out${j}`, xs[outL] + r + 12, ys[outL][j]);
+  }
+
+  // --- prediction callout ---
+  const outIdx = OUTPUT.indexOf(Math.max(...OUTPUT));
+  if (s.name === 'pred' || s.name === 'end') {
+    const a = s.name === 'pred' ? ease : 1;
+    ctx.globalAlpha = a;
+    const ox = xs[outL], oy = ys[outL][outIdx];
+    ctx.strokeStyle = '#10b981'; ctx.lineWidth = 4;
+    ctx.strokeRect(ox - r - 6, oy - r - 6, 2 * (r + 6), 2 * (r + 6));
+    ctx.fillStyle = '#10b981'; ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(`Prediction: ${LABELS[outIdx] || 'out' + outIdx}`, ox, oy + r + 24);
+    ctx.globalAlpha = 1;
+  }
+
+  // --- status ---
+  if (s.name === 'hold') status.textContent = 'ready — press Play to propagate';
+  else if (s.name === 'hl' || s.name === 'wait' || s.name === 'hlout')
+    status.textContent = `forward pass: layer ${hlLayer + 1} → ${hlLayer + 2}`;
+  else status.textContent = `done — predicted ${LABELS[outIdx] || 'out' + outIdx}`;
+}
+function prevHl() { // layer whose highlight is 'held' during a wait segment
+  let idx = -1, acc = 0;
+  for (const sg of SEGS) { if (acc >= t) break; if (sg.name === 'hl') idx = sg.layer; acc += sg.dur; }
+  return idx;
+}
+
+function frame(ts) {
+  if (!playing) return;
+  const dt = Math.min((ts - last) / 1000, 0.05) * speed; last = ts;
+  t = Math.min(t + dt, TOTAL);
+  draw();
+  if (t >= TOTAL) { stop(); return; }
+  raf = requestAnimationFrame(frame);
+}
+function play() {
+  if (playing) return;
+  if (t >= TOTAL) t = 0;
+  playing = true; document.getElementById('play').textContent = 'Pause';
+  last = performance.now(); raf = requestAnimationFrame(frame);
+}
+function stop() {
+  playing = false; document.getElementById('play').textContent = 'Play';
+  cancelAnimationFrame(raf);
+}
+function reset() { stop(); t = 0; draw(); }
+function resize() {
+  const r = document.getElementById('stage').getBoundingClientRect();
+  cv.width = r.width; cv.height = r.height; draw();
+}
+
+document.getElementById('play').onclick = () => playing ? stop() : play();
+document.getElementById('reset').onclick = reset;
+document.getElementById('speed').oninput = (e) => {
+  speed = Number(e.target.value) / 10;
+  document.getElementById('speedV').textContent = e.target.value;
+};
+document.getElementById('thr').oninput = (e) => {
+  thr = Number(e.target.value) / 100;
+  document.getElementById('thrV').textContent = thr.toFixed(2);
+  if (!playing) draw();
+};
+window.addEventListener('resize', resize);
+reset(); resize();
+</script>
+</body>
+</html>

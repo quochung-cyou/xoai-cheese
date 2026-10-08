@@ -1,0 +1,7 @@
+{
+  "id": "tetrahedron",
+  "match": "a 3D tetrahedron / triangular pyramid — labels like \"3d tetra\", \"tetrahedron\", \"3d abcd\", or a rough wireframe sketch of a four-faced pyramid with vertices A B C D",
+  "params": "{\"labels\": true|false — A B C D vertex labels (default shown); \"flat\": true|false — start flattened/unfolded; \"slice\": true|false — open the slicing plane; \"tilt\": 0-180, \"offset\": -1.4..1.4, \"spin\": 0-360, \"cut\": \"full\"|\"above\"|\"below\"} — all optional",
+  "required_params": [],
+  "param_defaults": {}
+}

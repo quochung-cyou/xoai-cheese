@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head><script>
+addEventListener('error', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var t=(e&&e.message)||'Script failed to load';
+    var f=(e&&e.filename)||'';
+    if(m) m.textContent=f?t+' \u2014 '+f:t;
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+}, true);
+addEventListener('unhandledrejection', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var r=e&&e.reason;
+    var t=(r&&(r.message||r))||'Request failed';
+    if(m) m.textContent=String(t);
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+});
+</script>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body { font-family: ui-monospace, monospace; background: #f8fafc; color: #0f172a;
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header { padding: 8px 12px; font-size: 12px; font-weight: 700; color: #4f46e5;
+           border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
+  #status { margin-left: auto; font-size: 10px; color: #64748b; font-weight: 400; }
+  #stage { flex: 1; position: relative; }
+  canvas { position: absolute; inset: 0; }
+  #controls { padding: 8px 12px; border-top: 1px solid #e2e8f0; background: #fff;
+              display: flex; align-items: center; gap: 14px; font-size: 11px; flex-wrap: wrap; }
+  button { background: #4f46e5; color: #fff; border: 0; border-radius: 6px;
+           padding: 4px 12px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  button.ghost { background: #e2e8f0; color: #334155; }
+  label { display: flex; align-items: center; gap: 6px; color: #475569; }
+  input[type=range] { width: 90px; }
+  .val { color: #4f46e5; font-weight: 700; min-width: 24px; }
+</style>
+</head>
+<body>
+<header>Backpropagation<span id="status">ready</span></header>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="controls">
+  <button id="play">Play</button>
+  <button id="reset" class="ghost">Reset</button>
+  <label>Speed <input id="speed" type="range" min="1" max="20" value="10"><span class="val" id="speedV">10</span></label>
+</div>
+<script>
+const PARAMS = __PARAMS__;
+function sz(v, d) { const n = Math.round(Number(v)); return n >= 1 && n <= 12 ? n : d; }
+const LAYERS = [sz(PARAMS.input_size, 3), sz(PARAMS.hidden_size, 4), sz(PARAMS.output_size, 2)];
+const LCOL = ['#4f46e5', '#10b981', '#ef4444']; // input BLUE, hidden GREEN, output RED
+const LNAME = ['input', 'hidden', 'output'];
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const status = document.getElementById('status');
+let playing = false, raf = null, t = 0, last = 0, speed = 1;
+
+// Timeline mirroring the Manim scene:
+// nodes fade in -> edges create -> forward flash -> Loss -> back flash -> grad -> fade out.
+const SWEEP = 2.0, FLASH = 0.45; // flash window per edge inside a sweep
+const SEGS = [
+  { name: 'in', dur: 0.7 }, { name: 'edges', dur: 0.9 },
+  { name: 'forward', dur: SWEEP }, { name: 'loss', dur: 0.7 },
+  { name: 'wait', dur: 0.5 }, { name: 'backward', dur: SWEEP },
+  { name: 'grad', dur: 0.8 }, { name: 'hold', dur: 1.0 },
+  { name: 'out', dur: 0.8 }, { name: 'end', dur: 0.4 },
+];
+const TOTAL = SEGS.reduce((s, x) => s + x.dur, 0);
+
+function segAt(tt) {
+  let acc = 0;
+  for (const s of SEGS) {
+    if (tt < acc + s.dur) return { s, p: (tt - acc) / s.dur };
+    acc += s.dur;
+  }
+  return { s: SEGS[SEGS.length - 1], p: 1 };
+}
+const clamp01 = x => Math.min(1, Math.max(0, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+
+function layout() {
+  const w = cv.width, h = cv.height, nL = LAYERS.length;
+  const marginX = Math.max(70, w * 0.16);
+  const maxN = Math.max(...LAYERS);
+  const r = Math.max(12, Math.min(24, h / (maxN * 3.2), w / (nL * 6)));
+  const xs = LAYERS.map((_, i) => marginX + i * (w - 2 * marginX) / (nL - 1));
+  const span = h * 0.62;
+  const ys = LAYERS.map(n => {
+    if (n === 1) return [h / 2];
+    const top = h / 2 - span / 2, bot = h / 2 + span / 2;
+    return Array.from({ length: n }, (_, j) => top + j * (bot - top) / (n - 1));
+  });
+  return { xs, ys, r };
+}
+
+// All edges: {l, i, j} input->hidden first, then hidden->output
+const EDGES = [];
+for (let l = 0; l < LAYERS.length - 1; l++)
+  for (let i = 0; i < LAYERS[l]; i++)
+    for (let j = 0; j < LAYERS[l + 1]; j++) EDGES.push({ l, i, j });
+
+function arrow(x1, y1, x2, y2, r, k, color, width, alpha) {
+  // edge from node-edge to node-edge, grown to fraction k, with head
+  const ax = lerp(x1, x2 - r, k), ay = lerp(y1, y2, k);
+  const bx = lerp(x1, x2, k), by = ay;
+  ctx.strokeStyle = ctx.fillStyle = color;
+  ctx.globalAlpha = alpha; ctx.lineWidth = width;
+  ctx.beginPath(); ctx.moveTo(x1 + r, y1); ctx.lineTo(bx, by); ctx.stroke();
+  if (k >= 0.98) { // arrowhead at destination node boundary
+    const dx = x2 - x1, dy = y2 - y1, m = Math.hypot(dx, dy) || 1;
+    const hx = x2 - r, hy = y2, ux = dx / m, uy = dy / m;
+    ctx.beginPath();
+    ctx.moveTo(hx + 2 * ux, hy + 2 * uy);
+    ctx.lineTo(hx + 2 * ux - 9 * ux - 4 * uy, hy + 2 * uy - 9 * uy + 4 * ux);
+    ctx.lineTo(hx + 2 * ux - 9 * ux + 4 * uy, hy + 2 * uy - 9 * uy - 4 * ux);
+    ctx.fill();
+  }
+}
+
+function draw() {
+  const w = cv.width, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  const { xs, ys, r } = layout();
+  const { s, p } = segAt(t);
+  const ease = clamp01(p);
+  // global fade-out at the end (FadeOut of the whole VGroup)
+  const gA = s.name === 'out' ? 1 - ease : s.name === 'end' ? 0 : 1;
+  const nodeA = s.name === 'in' ? ease : 1;
+  const edgeK = s.name === 'in' ? 0 : s.name === 'edges' ? ease : 1;
+  if (gA <= 0) { status.textContent = 'done'; return; }
+
+  // --- edges + traveling flashes ---
+  // forward: yellow pulses L->R staggered over sweep; backward: purple R->L.
+  const sweeping = s.name === 'forward' || s.name === 'backward';
+  const back = s.name === 'backward';
+  const col = back ? '#a855f7' : '#f59e0b';
+  const order = back ? [...EDGES].reverse() : EDGES;
+  for (let k = 0; k < EDGES.length; k++) {
+    const e = EDGES[k];
+    const x1 = xs[e.l], y1 = ys[e.l][e.i], x2 = xs[e.l + 1], y2 = ys[e.l + 1][e.j];
+    let c = '#94a3b8', wd = 1.5, a = 0.6;
+    if (sweeping && edgeK >= 1) {
+      const oi = order.indexOf(e);
+      const st = oi / EDGES.length * (SWEEP - FLASH);
+      const ft = p * SWEEP - st; // time since this edge's flash began
+      if (ft >= 0 && ft <= FLASH) {
+        const ph = ft / FLASH;
+        c = col; wd = 3.5; a = Math.sin(ph * Math.PI) * 0.95 + 0.1;
+        // pulse dot traveling along signal direction (forward: ->, backward: <-)
+        const pk = back ? 1 - ph : ph;
+        const px = lerp(x1 + r, x2 - r, pk), py = lerp(y1, y2, pk);
+        ctx.fillStyle = col; ctx.globalAlpha = gA;
+        ctx.beginPath(); ctx.arc(px, py, 5, 0, 7); ctx.fill();
+      }
+    }
+    arrow(x1, y1, x2, y2, r, edgeK, c, wd, a * gA);
+  }
+
+  // --- nodes ---
+  for (let l = 0; l < LAYERS.length; l++) {
+    for (let j = 0; j < LAYERS[l]; j++) {
+      ctx.fillStyle = '#f8fafc'; ctx.strokeStyle = LCOL[l]; ctx.lineWidth = 3;
+      ctx.globalAlpha = nodeA * gA;
+      ctx.beginPath(); ctx.arc(xs[l], ys[l][j], r, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = LCOL[l];
+      ctx.beginPath(); ctx.arc(xs[l], ys[l][j], r * 0.35, 0, 7); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = gA;
+
+  // layer captions
+  ctx.fillStyle = '#94a3b8'; ctx.font = '10px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let l = 0; l < LAYERS.length; l++)
+    ctx.fillText(LNAME[l], xs[l], Math.min(...ys[l]) - r - 18);
+
+  // --- "Loss" callout above output layer (stays through backward) ---
+  const showLoss = s.name === 'loss' || s.name === 'wait' || s.name === 'backward'
+    || s.name === 'grad' || s.name === 'hold';
+  if (showLoss) {
+    const a = s.name === 'loss' ? ease : 1;
+    const outL = LAYERS.length - 1;
+    ctx.globalAlpha = a * gA;
+    ctx.fillStyle = '#ef4444'; ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    const ox = xs[outL], oy = Math.min(...ys[outL]) - r - 34;
+    ctx.fillText('Loss', ox, oy);
+    // wavy underline like Write() settling
+    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ox - 24, oy + 4); ctx.lineTo(ox + 24, oy + 4); ctx.stroke();
+  }
+
+  // --- "∇w L" below hidden layer ---
+  const showGrad = s.name === 'grad' || s.name === 'hold';
+  if (showGrad) {
+    const a = s.name === 'grad' ? ease : 1;
+    ctx.globalAlpha = a * gA;
+    ctx.fillStyle = '#a855f7'; ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('∇w L', xs[1], Math.max(...ys[1]) + r + 20);
+  }
+  ctx.globalAlpha = 1;
+
+  // --- status ---
+  if (s.name === 'in' || s.name === 'edges') status.textContent = 'building network…';
+  else if (s.name === 'forward') status.textContent = 'forward pass →';
+  else if (s.name === 'loss' || s.name === 'wait') status.textContent = 'computing loss…';
+  else if (s.name === 'backward') status.textContent = 'backward pass ← (gradients)';
+  else if (s.name === 'grad' || s.name === 'hold') status.textContent = '∇w L — update weights';
+  else status.textContent = 'done — press Play to replay';
+}
+
+function frame(ts) {
+  if (!playing) return;
+  const dt = Math.min((ts - last) / 1000, 0.05) * speed; last = ts;
+  t = Math.min(t + dt, TOTAL);
+  draw();
+  if (t >= TOTAL) { stop(); return; }
+  raf = requestAnimationFrame(frame);
+}
+function play() {
+  if (playing) return;
+  if (t >= TOTAL) t = 0;
+  playing = true; document.getElementById('play').textContent = 'Pause';
+  last = performance.now(); raf = requestAnimationFrame(frame);
+}
+function stop() {
+  playing = false; document.getElementById('play').textContent = 'Play';
+  cancelAnimationFrame(raf);
+}
+function reset() { stop(); t = 0; draw(); }
+function resize() {
+  const r = document.getElementById('stage').getBoundingClientRect();
+  cv.width = r.width; cv.height = r.height; draw();
+}
+
+document.getElementById('play').onclick = () => playing ? stop() : play();
+document.getElementById('reset').onclick = reset;
+document.getElementById('speed').oninput = (e) => {
+  speed = Number(e.target.value) / 10;
+  document.getElementById('speedV').textContent = e.target.value;
+};
+window.addEventListener('resize', resize);
+reset(); resize();
+</script>
+</body>
+</html>

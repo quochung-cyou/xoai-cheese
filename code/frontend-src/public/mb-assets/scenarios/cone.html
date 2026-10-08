@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script>
+addEventListener('error', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var t=(e&&e.message)||'Script failed to load';
+    var f=(e&&e.filename)||'';
+    if(m) m.textContent=f?t+' \u2014 '+f:t;
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+}, true);
+addEventListener('unhandledrejection', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var r=e&&e.reason;
+    var t=(r&&(r.message||r))||'Request failed';
+    if(m) m.textContent=String(t);
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+});
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conic Sections</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden;
+               font-family: ui-sans-serif, system-ui, sans-serif;
+               background: #1e2420; }
+  #stage { position: absolute; inset: 0; }
+  #modes { position: absolute; top: 8px; right: 10px; z-index: 5;
+           display: flex; gap: 4px; }
+  #modes button { display: flex; align-items: center; justify-content: center;
+                  width: 24px; height: 22px; padding: 0;
+                  border: 1px solid #e2e8f0; border-radius: 6px;
+                  background: rgba(255,255,255,.9); color: #475569;
+                  cursor: pointer; }
+  #modes button:hover { color: #1e293b; border-color: #cbd5e1; }
+  #modes button.on { background: #4f46e5; color: #fff;
+                     border-color: #4f46e5; }
+  #modes svg { width: 13px; height: 13px; }
+  #palette { position: absolute; top: 36px; right: 10px; z-index: 5;
+             display: none; gap: 4px; align-items: center; }
+  #palette.show { display: flex; }
+  #palette button { width: 16px; height: 16px; border-radius: 50%;
+                    border: 2px solid #fff; padding: 0; cursor: pointer;
+                    box-shadow: 0 0 0 1px #cbd5e1; }
+  #palette button.on { box-shadow: 0 0 0 2px #4f46e5; }
+  #palette button.erase { background: linear-gradient(135deg, #fff 42%,
+                          #ef4444 42%, #ef4444 58%, #fff 58%); }
+  #palette button.reset { width: auto; height: 16px; border-radius: 6px;
+                          padding: 0 6px; font-size: 9px; font-weight: 600;
+                          background: #fff; color: #64748b; }
+  #params { position: absolute; left: 10px; bottom: 8px; z-index: 5;
+            display: flex; flex-direction: column; gap: 4px; }
+  .param { display: flex; align-items: center; gap: 6px; width: max-content;
+           font-size: 10px; font-weight: 600; color: #475569;
+           background: rgba(255,255,255,.9); border: 1px solid #e2e8f0;
+           border-radius: 6px; padding: 2px 8px; }
+  .param .pname { min-width: 60px; }
+  .param input[type=range] { width: 84px; accent-color: #4f46e5; }
+  .param .pval { min-width: 26px; text-align: right; color: #1e293b; }
+  .param select { font: inherit; border: 1px solid #e2e8f0;
+                  border-radius: 4px; background: #fff; color: #1e293b;
+                  padding: 1px 4px; }
+  #sliceread { position: absolute; right: 10px; bottom: 122px; z-index: 5;
+               text-align: right; font-weight: 700; }
+  #sliceread .sr-main { font-size: 12px; color: #1e293b;
+    background: rgba(255,255,255,.92); border: 1px solid #e2e8f0;
+    border-radius: 6px; padding: 3px 8px; }
+  #sliceread .sr-info { margin-top: 3px; font-size: 11px; color: #be123c;
+    background: rgba(255,255,255,.92); border: 1px solid #e2e8f0;
+    border-radius: 6px; padding: 2px 8px; }
+  #sliceview { position: absolute; right: 10px; bottom: 8px; z-index: 5;
+               background: rgba(255,255,255,.92);
+               border: 1px solid #e2e8f0; border-radius: 8px; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="modes">
+  <button data-m="orbit" class="on" title="Orbit camera (v)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M10.4 21.9a10 10 0 0 0 9.94-15.42"/><path d="M13.5 2.1a10 10 0 0 0-9.84 15.42"/></svg></button>
+  <button data-m="translate" title="Move (g)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg></button>
+  <button data-m="rotate" title="Rotate (r)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+  <button data-m="scale" title="Scale (s)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 9 15"/><path d="M21 3h-6"/><path d="M21 3v6"/><path d="M3 21l12-12"/><path d="M3 21h6"/><path d="M3 21v-6"/></svg></button>
+  <button data-m="paint" title="Paint patches (p)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></button>
+  <button id="flatbtn" title="Flatten / unfold (f)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6"/><rect x="3" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/><rect x="15" y="9" width="6" height="6"/><rect x="9" y="15" width="6" height="6"/></svg></button>
+  <button id="slicebtn" title="Slice plane (x)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 14-6 6h9v-3"/><path d="M18.37 3.63 8 14l3 3L21.37 6.63a2.12 2.12 0 1 0-3-3Z"/></svg></button>
+  <button id="grabbtn" title="Grab plane — then use move/rotate tools" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v16h16"/><path d="m5 19 6-6"/><path d="m2 6 3-3 3 3"/><path d="m18 16 3 3-3 3"/></svg></button>
+
+</div>
+<div id="palette"></div>
+<div id="params"></div>
+<div id="sliceread"></div>
+<canvas id="sliceview" width="150" height="110"></canvas>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+// __PARAMS__ is substituted by the backend's scenario renderer; left
+// unsubstituted (dev/test) the try/catch yields an empty map.
+const SCENARIO_PARAMS = (() => {
+  try { return __PARAMS__; } catch { return {}; }
+})();
+
+const stage = document.getElementById('stage');
+
+// ---------------- three setup ----------------
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+stage.appendChild(renderer.domElement);
+
+// Sandboxed srcdoc iframes can't be transparent (opaque white in
+// Chrome), so the doc body paints the board color instead — the host
+// syncs live changes over postMessage. The renderer stays alpha so
+// that color is what shows through.
+const scene = new THREE.Scene();
+const setBoardBg = (c) => {
+  document.documentElement.style.background = c;
+  document.body.style.background = c;
+};
+window.parent.postMessage({
+  source: 'ai4edu', type: 'ready',
+  artifactId: window.__AI4EDU_ARTIFACT_ID__ }, '*');
+addEventListener('message', (e) => {
+  const d = e.data;
+  if (d && d.source === 'ai4edu' && typeof d.boardBg === 'string' &&
+      /^#[0-9a-f]{3,8}$/i.test(d.boardBg)) setBoardBg(d.boardBg);
+});
+const camera = new THREE.PerspectiveCamera(
+  40, stage.clientWidth / stage.clientHeight, 0.01, 100);
+camera.position.set(0.6, 2.1, 3.6);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.085;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xa7acb2, 1.05));
+const key = new THREE.DirectionalLight(0xfffaf4, 2.1);
+key.position.set(-2, 4, 3);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xe9f0ff, 1.6);
+rim.position.set(2, 2, -3);
+scene.add(rim);
+
+new ResizeObserver(() => {
+  camera.aspect = stage.clientWidth / stage.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(stage.clientWidth, stage.clientHeight);
+}).observe(stage);
+renderer.setSize(stage.clientWidth, stage.clientHeight);
+
+// Everything transformable lives in one group so the gizmo moves the
+// whole sim as a unit.
+const shape = new THREE.Group();
+scene.add(shape);
+
+
+// ---------------- sim helpers ----------------
+const TICKS = [];
+const tick = (f) => TICKS.push(f);
+
+const paramsEl = document.getElementById('params');
+// Control keys = normalized labels ('major R' -> 'major_r'); a scenario
+// seeds any control by that key via __PARAMS__. The handler fires once
+// on registration with the initial value, so sims need no separate
+// default-init call.
+const pKey = (l) =>
+  l.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+function param(label, min, max, val, step, fn) {
+  const sv = SCENARIO_PARAMS[pKey(label)];
+  const init = typeof sv === 'number' && isFinite(sv) ? sv : val;
+  const row = document.createElement('label');
+  row.className = 'param';
+  const name = document.createElement('span');
+  name.className = 'pname';
+  name.textContent = label;
+  const inp = document.createElement('input');
+  inp.type = 'range';
+  inp.min = min; inp.max = max; inp.step = step; inp.value = init;
+  const out = document.createElement('span');
+  out.className = 'pval';
+  out.textContent = init;
+  inp.addEventListener('input', () => {
+    const v = +inp.value;
+    out.textContent = Math.round(v * 100) / 100;
+    fn(v);
+  });
+  row.append(name, inp, out);
+  paramsEl.append(row);
+  fn(init);
+  return row;
+}
+function pick(label, options, fn) {
+  const sv = SCENARIO_PARAMS[pKey(label)];
+  const init = sv != null && sv !== '' ? String(sv) : options[0];
+  const row = document.createElement('label');
+  row.className = 'param';
+  const name = document.createElement('span');
+  name.className = 'pname';
+  name.textContent = label;
+  const sel = document.createElement('select');
+  for (const opt of options) {
+    const o = document.createElement('option');
+    o.value = o.textContent = opt;
+    sel.append(o);
+  }
+  const canonical = options.find(
+    (o) => o.toLowerCase() === init.toLowerCase());
+  if (canonical) sel.value = canonical;
+  sel.addEventListener('change', () => fn(sel.value));
+  row.append(name, sel);
+  paramsEl.append(row);
+  fn(init);
+  return row;
+}
+
+// ---------------- flatten ----------------
+let FLAT = 0, FLATTGT = 0;
+const flat = () => FLAT;
+const FLATCHBS = [];
+const onFlatten = (f) => FLATCHBS.push(f);
+const DW = 3.0, DH = 2.0;             // flat domain rect size
+const chart = (u, v) =>
+  new THREE.Vector3((u - 0.5) * DW, (v - 0.5) * DH, 0);
+
+const FLATMESHES = [];
+function flattenMesh(mesh) {
+  const geo = mesh.geometry;
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  if (!pos || !uv) return;
+  FLATMESHES.push({ mesh, pos, uv, base: pos.array.slice() });
+}
+let _flatApplied = -1;
+// Sims that rebuild geometry call this before re-registering flattenMesh.
+const clearFlat = () => { FLATMESHES.length = 0; _flatApplied = -1; };
+function applyFlatten() {
+  if (FLAT === _flatApplied) return;
+  _flatApplied = FLAT;
+  for (const f of FLATMESHES) {
+    const p = f.pos;
+    for (let i = 0; i < p.count; i++) {
+      const tx = (f.uv.getX(i) - 0.5) * DW;
+      const ty = (f.uv.getY(i) - 0.5) * DH;
+      p.setXYZ(i,
+        f.base[i * 3]     + (tx - f.base[i * 3])     * FLAT,
+        f.base[i * 3 + 1] + (ty - f.base[i * 3 + 1]) * FLAT,
+        f.base[i * 3 + 2] * (1 - FLAT));
+    }
+    p.needsUpdate = true;
+    f.mesh.geometry.computeVertexNormals();
+  }
+  for (const cb of FLATCHBS) cb(FLAT);
+}
+
+
+// ---------------- paint ----------------
+// Patch = a set of triangles. 'faces' buckets by rounded face normal;
+// [u,v] tiles the uv domain into a grid of cells. Painting is groups +
+// a material array — no extra meshes, wireframe overlays unaffected.
+const PALETTE_COLORS = ["#93c5fd","#f9a8d4","#86efac","#fde68a","#fca5a5","#c4b5fd","#67e8f9","#fbbf24"];
+let PAINTING = false;
+let paintColor = PALETTE_COLORS[0];
+const PAINTABLES = [];
+const ray = new THREE.Raycaster();
+
+function paintable(mesh, spec) {
+  const geo = mesh.geometry;
+  const pos = geo.attributes.position;
+  const uvA = geo.attributes.uv;
+  const index = geo.index;
+  const nTri = index ? index.count / 3 : pos.count / 3;
+  const patchOf = new Array(nTri);
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const va = new THREE.Vector3(), vb = new THREE.Vector3();
+  for (let t = 0; t < nTri; t++) {
+    const i0 = index ? index.getX(3 * t) : 3 * t;
+    const i1 = index ? index.getX(3 * t + 1) : 3 * t + 1;
+    const i2 = index ? index.getX(3 * t + 2) : 3 * t + 2;
+    let key;
+    if (spec === 'faces') {
+      a.fromBufferAttribute(pos, i0);
+      b.fromBufferAttribute(pos, i1);
+      c.fromBufferAttribute(pos, i2);
+      const n = va.subVectors(b, a).cross(vb.subVectors(c, a)).normalize();
+      key = 'f' + n.x.toFixed(2) + ',' + n.y.toFixed(2) + ',' + n.z.toFixed(2);
+    } else {
+      let u = 0, v = 0;
+      for (const i of [i0, i1, i2]) { u += uvA.getX(i); v += uvA.getY(i); }
+      u /= 3; v /= 3;
+      key = Math.min(spec[0] - 1, Math.floor(u * spec[0])) + ':' +
+            Math.min(spec[1] - 1, Math.floor(v * spec[1]));
+    }
+    patchOf[t] = key;
+  }
+  PAINTABLES.push({ mesh, patchOf, painted: new Map(), base: mesh.material });
+}
+
+function applyPaint(entry) {
+  const geo = entry.mesh.geometry;
+  const mats = [entry.base];
+  const colorIdx = new Map();
+  for (const col of entry.painted.values()) {
+    if (!colorIdx.has(col)) {
+      colorIdx.set(col, mats.length);
+      const m = entry.base.clone();
+      m.color = new THREE.Color(col);
+      if (m.transparent) m.opacity = Math.max(m.opacity, 0.85);
+      if (typeof SLICECLIP !== 'undefined' && SLICECLIP) m.clippingPlanes = SLICECLIP;
+      mats.push(m);
+    }
+  }
+  entry.mesh.material = mats;
+  geo.clearGroups();
+  // Groups need contiguous runs — one per run of equal material index.
+  const mi = entry.patchOf.map((key) =>
+    entry.painted.has(key) ? colorIdx.get(entry.painted.get(key)) : 0);
+  let s = 0;
+  for (let t = 1; t <= mi.length; t++) {
+    if (t === mi.length || mi[t] !== mi[s]) {
+      geo.addGroup(s * 3, (t - s) * 3, mi[s]);
+      s = t;
+    }
+  }
+}
+
+function inScene(o) {
+  while (o) { if (o === scene) return true; o = o.parent; }
+  return false;
+}
+
+let downXY = null;
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  downXY = [e.clientX, e.clientY];
+});
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!PAINTING || !downXY) return;
+  const dx = e.clientX - downXY[0], dy = e.clientY - downXY[1];
+  downXY = null;
+  if (dx * dx + dy * dy > 16) return;      // a drag is orbit, not a click
+  const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(
+    ((e.clientX - r.left) / r.width) * 2 - 1,
+    -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  const hits = ray.intersectObjects(
+    PAINTABLES.filter((p) => inScene(p.mesh)).map((p) => p.mesh), false);
+  if (!hits.length || hits[0].faceIndex === undefined) return;
+  const entry = PAINTABLES.find((p) => p.mesh === hits[0].object);
+  const key = entry.patchOf[hits[0].faceIndex];
+  if (key === undefined) return;
+  if (paintColor === null) entry.painted.delete(key);
+  else entry.painted.set(key, paintColor);
+  applyPaint(entry);
+});
+
+// Swatch palette — shown only in paint mode.
+const paletteEl = document.getElementById('palette');
+function addSwatch(col) {
+  const b = document.createElement('button');
+  b.style.background = col;
+  b.title = col;
+  b.addEventListener('click', () => {
+    paintColor = col;
+    [...paletteEl.children].forEach((x) => x.classList.toggle('on', x === b));
+  });
+  paletteEl.append(b);
+  return b;
+}
+PALETTE_COLORS.forEach(addSwatch);
+const erase = document.createElement('button');
+erase.className = 'erase';
+erase.title = 'Erase patch color';
+erase.addEventListener('click', () => {
+  paintColor = null;
+  [...paletteEl.children].forEach((x) => x.classList.toggle('on', x === erase));
+});
+paletteEl.append(erase);
+const reset = document.createElement('button');
+reset.className = 'reset';
+reset.textContent = 'reset';
+reset.addEventListener('click', () => {
+  for (const p of PAINTABLES) { p.painted.clear(); applyPaint(p); }
+});
+paletteEl.append(reset);
+paletteEl.children[0].classList.add('on');
+
+
+
+// ---------------- slice ----------------
+// A world-space plane cuts every registered mesh; the section is drawn
+// as thick segments and projected into a 2D inset. The 'cut' pick clips
+// either side via localClipping — the classic look-inside-the-solid.
+renderer.localClippingEnabled = true;
+const SLICABLES = [];
+const sliceable = (m) => SLICABLES.push(m);
+const clearSlice = () => { SLICABLES.length = 0; };
+let SLICECLIP = null;                     // null = show both sides
+
+let sliceTilt = 35, sliceOffset = 0.35, sliceSpin = 0;
+const sliceN = new THREE.Vector3(), sliceP = new THREE.Vector3();
+const cutPlane = new THREE.Plane();
+const clipAbove = new THREE.Plane(), clipBelow = new THREE.Plane();
+
+// Plane visuals live in a group — a gizmo can drive its pose directly
+// (circle faces local +Z, arrow points +Z; the group pose IS the plane).
+const planeGroup = new THREE.Group();
+scene.add(planeGroup);
+const planeMesh = new THREE.Mesh(
+  new THREE.CircleGeometry(2.1, 48),
+  new THREE.MeshBasicMaterial({ color: 0x4f46e5, transparent: true,
+    opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }));
+planeGroup.add(planeMesh);
+const sliceArrow = new THREE.ArrowHelper(
+  new THREE.Vector3(0, 0, 1), new THREE.Vector3(), 0.55, 0xe11d48, 0.16, 0.09);
+planeGroup.add(sliceArrow);
+const sliceLine = new THREE.LineSegments(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({ color: 0xe11d48 }));
+scene.add(sliceLine);
+
+const sliceRead = document.getElementById('sliceread');
+const sliceCv = document.getElementById('sliceview');
+const sliceCtx = sliceCv.getContext('2d');
+let _sliceInfo = '';
+const setSliceInfo = (t) => { _sliceInfo = t; };
+
+const _sliceInScene = (o) => {
+  while (o) { if (o === scene) return true; o = o.parent; }
+  return false;
+};
+
+// The whole tool is hidden until the toolbar button turns it on.
+let sliceOn = false, sliceCut = 'full';
+const sliceRows = [
+  param('tilt °', 0, 180, sliceTilt, 1, (v) => (sliceTilt = v)),
+  param('offset', -1.4, 1.4, sliceOffset, 0.02, (v) => (sliceOffset = v)),
+  param('spin °', 0, 360, sliceSpin, 1, (v) => (sliceSpin = v)),
+  pick('cut', ['full', 'above', 'below'], (v) => { sliceCut = v; applyCut(); }),
+];
+const sliceBtnEl = document.getElementById('slicebtn');
+const grabBtnEl = document.getElementById('grabbtn');
+let PLANE_GRAB = false;
+function setGrab(on) {
+  // Early return keeps the eval-time setSlice(false) away from curMode —
+  // it's a let in gizmoJs emitted after this block (typeof on a let in
+  // TDZ throws, it doesn't return 'undefined').
+  if (on === PLANE_GRAB) return;
+  PLANE_GRAB = on;
+  grabBtnEl.classList.toggle('on', on);
+  // Re-run the current mode so the gizmo jumps between shape and plane.
+  setMode(curMode);
+}
+grabBtnEl.addEventListener('click', () => setGrab(!PLANE_GRAB));
+function applyCut() {
+  SLICECLIP = !sliceOn || sliceCut === 'full' ? null
+    : sliceCut === 'above' ? clipAbove : clipBelow;
+}
+function setSlice(on) {
+  sliceOn = on;
+  sliceBtnEl.classList.toggle('on', on);
+  sliceBtnEl.title = on ? 'Hide slice plane (x)' : 'Slice plane (x)';
+  planeGroup.visible = sliceLine.visible = on;
+  sliceRead.style.display = sliceCv.style.display = on ? '' : 'none';
+  grabBtnEl.style.display = on ? '' : 'none';
+  for (const r of sliceRows) r.style.display = on ? '' : 'none';
+  if (!on) setGrab(false);
+  applyCut();
+}
+sliceBtnEl.addEventListener('click', () => setSlice(!sliceOn));
+addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'x' && !e.repeat) setSlice(!sliceOn);
+});
+setSlice(false);
+// Scenario: open the slice tool on load (tilt/offset/spin/cut seed
+// through the generic param/pick init above).
+if (SCENARIO_PARAMS.slice) setSlice(true);
+
+// Write a param row's input + readout when the gizmo drives the values.
+const rowVal = (row, v) => {
+  const inp = row.querySelector('input'), out = row.querySelector('.pval');
+  if (inp) inp.value = v;
+  if (out) out.textContent = Math.round(v * 100) / 100;
+};
+
+const _sa = new THREE.Vector3(), _sb = new THREE.Vector3(),
+      _sc = new THREE.Vector3(), _sd = new THREE.Vector3();
+
+tick(() => {
+  if (!sliceOn) return;
+  if (!PLANE_GRAB) {
+    // Sliders drive the pose.
+    const th = (sliceTilt * Math.PI) / 180, ph = (sliceSpin * Math.PI) / 180;
+    sliceN.set(Math.sin(th) * Math.cos(ph), Math.cos(th),
+               Math.sin(th) * Math.sin(ph));
+    planeGroup.position.copy(sliceN).multiplyScalar(sliceOffset);
+    planeGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), sliceN);
+  }
+  // The group pose is the plane — read normal + a point from it.
+  sliceN.set(0, 0, 1).applyQuaternion(planeGroup.quaternion);
+  sliceP.copy(planeGroup.position);
+  cutPlane.setFromNormalAndCoplanarPoint(sliceN, sliceP);
+  const _sOff = sliceN.dot(sliceP);
+  clipAbove.set(sliceN, -_sOff);
+  clipBelow.copy(clipAbove).negate();
+  if (PLANE_GRAB) {
+    // Gizmo drives the pose — reflect it back into the sliders.
+    sliceTilt = Math.round(
+      Math.acos(Math.min(1, Math.max(-1, sliceN.y))) * 180 / Math.PI);
+    sliceSpin = Math.round(
+      (Math.atan2(sliceN.z, sliceN.x) * 180 / Math.PI + 360) % 360);
+    sliceOffset = Math.round(_sOff * 100) / 100;
+    rowVal(sliceRows[0], sliceTilt);
+    rowVal(sliceRows[1], sliceOffset);
+    rowVal(sliceRows[2], sliceSpin);
+  }
+
+  // Plane x triangles -> world-space section segments.
+  const segs = [];
+  for (const m of SLICABLES) {
+    if (!_sliceInScene(m)) continue;
+    m.updateWorldMatrix(true, false);
+    const pos = m.geometry.attributes.position, idx = m.geometry.index;
+    const nT = idx ? idx.count / 3 : pos.count / 3;
+    for (let t = 0; t < nT; t++) {
+      const i0 = idx ? idx.getX(3 * t) : 3 * t;
+      const i1 = idx ? idx.getX(3 * t + 1) : 3 * t + 1;
+      const i2 = idx ? idx.getX(3 * t + 2) : 3 * t + 2;
+      _sa.fromBufferAttribute(pos, i0).applyMatrix4(m.matrixWorld);
+      _sb.fromBufferAttribute(pos, i1).applyMatrix4(m.matrixWorld);
+      _sc.fromBufferAttribute(pos, i2).applyMatrix4(m.matrixWorld);
+      const d0 = cutPlane.distanceToPoint(_sa),
+            d1 = cutPlane.distanceToPoint(_sb),
+            d2 = cutPlane.distanceToPoint(_sc);
+      for (const [p0, dd0, p1, dd1] of [
+        [_sa, d0, _sb, d1], [_sb, d1, _sc, d2], [_sc, d2, _sa, d0]]) {
+        if ((dd0 > 0) === (dd1 > 0) || Math.abs(dd0 - dd1) < 1e-9) continue;
+        const tt = dd0 / (dd0 - dd1);
+        segs.push(p0.x + (p1.x - p0.x) * tt,
+                  p0.y + (p1.y - p0.y) * tt,
+                  p0.z + (p1.z - p0.z) * tt);
+      }
+    }
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mt of mats) mt.clippingPlanes = SLICECLIP;
+  }
+  sliceLine.geometry.setAttribute('position',
+    new THREE.BufferAttribute(new Float32Array(segs), 3));
+
+  // 2D inset — project the section onto the plane's own basis.
+  const u = Math.abs(sliceN.y) > 0.99
+    ? new THREE.Vector3(1, 0, 0)
+    : new THREE.Vector3(0, 1, 0).cross(sliceN).normalize();
+  const v = new THREE.Vector3().crossVectors(sliceN, u);
+  const pts = [];
+  let cx = 0, cy = 0;
+  for (let i = 0; i < segs.length; i += 3) {
+    _sd.set(segs[i], segs[i + 1], segs[i + 2]);
+    const x = _sd.dot(u), y = _sd.dot(v);
+    pts.push(x, y); cx += x; cy += y;
+  }
+  const n = pts.length / 2;
+  sliceCtx.clearRect(0, 0, sliceCv.width, sliceCv.height);
+  if (n) {
+    cx /= n; cy /= n;
+    const s = 26, hw = sliceCv.width / 2, hh = sliceCv.height / 2;
+    sliceCtx.strokeStyle = '#cbd5e1';
+    sliceCtx.lineWidth = 1;
+    sliceCtx.beginPath();
+    sliceCtx.moveTo(0, hh); sliceCtx.lineTo(sliceCv.width, hh);
+    sliceCtx.moveTo(hw, 0); sliceCtx.lineTo(hw, sliceCv.height);
+    sliceCtx.stroke();
+    sliceCtx.strokeStyle = '#e11d48';
+    sliceCtx.lineWidth = 1.5;
+    sliceCtx.beginPath();
+    for (let i = 0; i < n; i += 2) {
+      sliceCtx.moveTo(hw + (pts[2 * i] - cx) * s,
+                      hh - (pts[2 * i + 1] - cy) * s);
+      sliceCtx.lineTo(hw + (pts[2 * i + 2] - cx) * s,
+                      hh - (pts[2 * i + 3] - cy) * s);
+    }
+    sliceCtx.stroke();
+  }
+  sliceRead.innerHTML =
+    '<div class="sr-main">θ ' + sliceTilt + '° · d ' +
+    (sliceOffset >= 0 ? '+' : '') + sliceOffset.toFixed(2) + '</div>' +
+    (_sliceInfo ? '<div class="sr-info">' + _sliceInfo + '</div>' : '');
+});
+
+
+
+// ---------------- flatten toggle ----------------
+// FLATTGT is the target; the RAF loop eases FLAT toward it.
+const flatBtnEl = document.getElementById('flatbtn');
+function toggleFlat() {
+  FLATTGT = FLATTGT ? 0 : 1;
+  flatBtnEl.classList.toggle('on', FLATTGT === 1);
+  flatBtnEl.title = FLATTGT ? 'Refold (f)' : 'Flatten / unfold (f)';
+}
+flatBtnEl.addEventListener('click', toggleFlat);
+addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'f' && !e.repeat) toggleFlat();
+});
+if (SCENARIO_PARAMS.flat) toggleFlat();   // scenario: start unfolded
+
+// ---------------- sim ----------------
+
+const R = 1.0, H = 1.4;
+const ALPHA = Math.atan(R / H);                    // cone half-angle
+const CRIT = 90 - (ALPHA * 180) / Math.PI;         // parabola tilt
+
+const mat = new THREE.MeshStandardMaterial({
+  color: 0xfdba74, metalness: 0.05, roughness: 0.6,
+  transparent: true, opacity: 0.75, side: THREE.DoubleSide });
+const wireMat = new THREE.MeshBasicMaterial({
+  color: 0x9a3412, wireframe: true, transparent: true, opacity: 0.25 });
+
+// Top nappe: apex at origin, base circle at y=H. Bottom mirrored.
+const top = new THREE.Mesh(
+  new THREE.CylinderGeometry(R, 0.001, H, 72, 8, true), mat);
+top.position.y = H / 2;
+const bot = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.001, R, H, 72, 8, true), mat);
+bot.position.y = -H / 2;
+const wireT = new THREE.Mesh(
+  new THREE.CylinderGeometry(R, 0.001, H, 24, 4, true), wireMat);
+wireT.position.y = H / 2;
+const wireB = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.001, R, H, 24, 4, true), wireMat);
+wireB.position.y = -H / 2;
+shape.add(top, bot, wireT, wireB);
+
+sliceable(top);
+sliceable(bot);
+paintable(top, [10, 4]);
+paintable(bot, [10, 4]);
+flattenMesh(top);
+flattenMesh(bot);
+
+// Section type: tilt < crit -> ellipse (0 = circle), = crit -> parabola,
+// > crit -> hyperbola (cuts both nappes). Near the apex it's degenerate.
+tick(() => {
+  const t = sliceTilt, d = Math.abs(sliceOffset);
+  const crit = 'crit ' + CRIT.toFixed(1) + '°';
+  if (d < 0.05) setSliceInfo('degenerate — through the apex');
+  else if (Math.abs(t - CRIT) < 0.6) setSliceInfo('parabola  (' + crit + ')');
+  else if (t < CRIT) setSliceInfo((t === 0 ? 'circle' : 'ellipse') +
+    '  (' + crit + ')');
+  else setSliceInfo('hyperbola — both nappes  (' + crit + ')');
+});
+
+
+// ---------------- transform gizmo ----------------
+// r169+ API: TransformControls extends Controls; the visible gizmo is a
+// separate helper added to the scene. Starts detached — 'move' reveals it.
+const gizmo = new TransformControls(camera, renderer.domElement);
+scene.add(gizmo.getHelper());
+gizmo.size = 0.8;
+gizmo.addEventListener('dragging-changed', (e) => {
+  controls.enabled = !e.value;   // never fight OrbitControls for a drag
+});
+const modeButtons = [...document.querySelectorAll('#modes button[data-m]')];
+let curMode = 'orbit';
+function setMode(m) {
+  curMode = m;
+  modeButtons.forEach((b) => b.classList.toggle('on', b.dataset.m === m));
+  gizmo.detach();
+  if (m === 'translate' || m === 'rotate' || m === 'scale') {
+    // Grab mode retargets the gizmo at the slice plane (scale stays
+    // on the shape — scaling a plane is meaningless).
+    const target =
+      typeof PLANE_GRAB !== 'undefined' && PLANE_GRAB && m !== 'scale'
+        ? planeGroup : shape;
+    gizmo.attach(target);
+    gizmo.setMode(m);
+  }
+  if (typeof PAINTING !== 'undefined') {
+    PAINTING = m === 'paint';
+    document.getElementById('palette').classList.toggle('show', PAINTING);
+  }
+}
+modeButtons.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.m)));
+const KEYS = { v: 'orbit', g: 'translate', r: 'rotate', s: 'scale', p: 'paint' };
+addEventListener('keydown', (e) => {
+  const m = KEYS[e.key.toLowerCase()];
+  if (m) setMode(m);
+});
+
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta();
+  const t = clock.elapsedTime;
+  if (FLAT !== FLATTGT) {
+    FLAT += (FLATTGT - FLAT) * Math.min(1, dt * 4.5);
+    if (Math.abs(FLATTGT - FLAT) < 0.002) FLAT = FLATTGT;
+  }
+  for (const f of TICKS) f(t);
+  applyFlatten();
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "id": "helix",
+  "match": "a helix / coil / spring / spiral staircase — labels like \"helix\", \"spring\", \"coil\", \"3d spiral\", or a zigzag/spring-like sketch",
+  "params": "{\"turns\": 2-14; \"flat\": true|false — start flattened/unfolded} — all optional",
+  "required_params": [],
+  "param_defaults": {}
+}

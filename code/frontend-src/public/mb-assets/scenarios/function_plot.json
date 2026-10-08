@@ -1,0 +1,11 @@
+{
+  "match": "any equation/function to plot on xy axes — \"y = x^3 - 2x\", \"z^4\", \"sin(x)\", a polynomial/trig/exponential curve, a drawn graph or axes with a formula; any single variable letter works",
+  "params": "{\"fn\": \"<math expression, one variable>\" e.g. \"x^3 - 2x + 1\", \"sin(x)\", \"z^4\", \"e^x\", \"sqrt(x)\"; \"x_min\"/\"x_max\": number — transcribe the formula as written (caret ^ powers, no need for JS syntax); default range -10..10",
+  "required_params": [
+    "fn"
+  ],
+  "param_defaults": {
+    "x_min": -10,
+    "x_max": 10
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "id": "lathe",
+  "match": "a surface of revolution / lathe-turned shape — vase, goblet, bulb spun around an axis; labels like \"lathe\", \"surface of revolution\", \"vase\", \"3d pottery\", or a profile curve with a spin axis",
+  "params": "{\"profile\": \"vase\"|\"goblet\"|\"bulb\"; \"flat\": true|false — start flattened/unfolded} — all optional",
+  "required_params": [],
+  "param_defaults": {},
+  "title_template": "Revolution: {profile}"
+}

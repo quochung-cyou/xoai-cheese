@@ -1,0 +1,20 @@
+{
+  "match": "human anatomy or biology — a body part, organ, bone, muscle, skeleton, skull, limb, or a region (heart, brain, lung, kidney, skull, spine, rib, biceps, knee, foot, digestive/nervous system, human body). Also matches a bare anatomical label with no other content.",
+  "params": "{\"focus\": \"<anatomical name as drawn/written, e.g. 'heart', 'femur', 'hand'>\", \"systems\": [\"<optional system ids to show, e.g. cardiac, respiratory — omit to show all>\"], \"isolate\": true|false} — 'focus' names the structure exactly as the sketch implies; omit only for a generic whole-body drawing. isolate=true shows only the focused structure(s); false keeps everything visible with focus highlighted.",
+  "required_params": [],
+  "param_defaults": {
+    "focus": "",
+    "systems": [],
+    "isolate": true
+  },
+  "title_template": "Anatomy: {focus}",
+  "analysis": {
+    "details_file": "atlas/structures.json",
+    "key_param": "focus",
+    "require_resolved": true,
+    "observation_template": "3D anatomy viewer focused on \"{label}\".",
+    "notes_fields": [
+      "description"
+    ]
+  }
+}

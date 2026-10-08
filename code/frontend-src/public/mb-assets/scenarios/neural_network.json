@@ -1,0 +1,27 @@
+{
+  "match": "a neural network diagram — layers of nodes/neurons wired edge-to-edge classifying an input (e.g. cat vs dog), \"neural network\", \"NN\", perceptron/MLP with input-hidden-output layers, forward propagation",
+  "params": "{\"input_activations\": [0..1, ...], \"hidden_activations\": [0..1, ...], \"output_activations\": [0..1, ...], \"output_labels\": [\"Cat\", \"Dog\"]} — read node values/labels from the sketch; array lengths set the layer sizes; defaults 4-5-2 cat vs dog",
+  "param_defaults": {
+    "input_activations": [
+      0.9,
+      0.2,
+      0.7,
+      0.1
+    ],
+    "hidden_activations": [
+      0.6,
+      0.3,
+      0.8,
+      0.4,
+      0.2
+    ],
+    "output_activations": [
+      0.7,
+      0.3
+    ],
+    "output_labels": [
+      "Cat",
+      "Dog"
+    ]
+  }
+}

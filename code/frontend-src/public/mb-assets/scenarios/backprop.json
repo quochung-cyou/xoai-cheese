@@ -1,0 +1,9 @@
+{
+  "match": "backpropagation / training a neural network — gradient flowing backward through layers, \"backprop\", forward pass then backward pass, loss and gradient (∇wL) arrows on an input-hidden-output network",
+  "params": "{\"input_size\": int, \"hidden_size\": int, \"output_size\": int} — read per-layer neuron counts from the sketch; defaults 3-4-2",
+  "param_defaults": {
+    "input_size": 3,
+    "hidden_size": 4,
+    "output_size": 2
+  }
+}

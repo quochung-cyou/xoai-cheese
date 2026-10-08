@@ -1,0 +1,9 @@
+{
+  "match": "a projectile arc, cannon/throw, trajectory under gravity",
+  "params": "{\"v0\": number, \"angle_deg\": number, \"g\": 9.81} — infer or default 20 m/s, 45°",
+  "param_defaults": {
+    "v0": 20,
+    "angle_deg": 45,
+    "g": 9.81
+  }
+}

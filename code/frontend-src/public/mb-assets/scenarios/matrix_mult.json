@@ -1,0 +1,36 @@
+{
+  "match": "matrix multiplication — bracketed grids of numbers labeled as matrices, OR handwritten text alone such as \"matrix mult\", \"matmul\", \"matrix multiplication\", \"A x B\", \"A * B\" (a title-only sketch counts — use default matrices)",
+  "params": "{\"A\": [[1, 2, -1], [0, 3, 4]], \"B\": [[2, 1], [-1, 0], [3, -2]]} — read both matrices from the sketch; A's column count must equal B's row count; if unreadable use plausible small integers",
+  "required_params": [
+    "A",
+    "B"
+  ],
+  "param_defaults": {
+    "A": [
+      [
+        1,
+        2,
+        -1
+      ],
+      [
+        0,
+        3,
+        4
+      ]
+    ],
+    "B": [
+      [
+        2,
+        1
+      ],
+      [
+        -1,
+        0
+      ],
+      [
+        3,
+        -2
+      ]
+    ]
+  }
+}

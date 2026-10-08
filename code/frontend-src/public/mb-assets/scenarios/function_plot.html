@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head><script>
+addEventListener('error', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var t=(e&&e.message)||'Script failed to load';
+    var f=(e&&e.filename)||'';
+    if(m) m.textContent=f?t+' \u2014 '+f:t;
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+}, true);
+addEventListener('unhandledrejection', function(e){
+  try{
+    var ov=document.getElementById('overlay'); if(!ov) return;
+    ov.className='err';
+    var m=ov.querySelector('.msg');
+    var r=e&&e.reason;
+    var t=(r&&(r.message||r))||'Request failed';
+    if(m) m.textContent=String(t);
+    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
+    ov.style.display='flex';
+  }catch(_){}
+});
+</script>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body { font-family: ui-monospace, monospace; background: #f8fafc; color: #0f172a;
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header { padding: 8px 12px; font-size: 12px; font-weight: 700; color: #4f46e5;
+           border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
+  #status { margin-left: auto; font-size: 10px; color: #64748b; font-weight: 400; }
+  #stage { flex: 1; position: relative; }
+  canvas { position: absolute; inset: 0; }
+  #controls { padding: 8px 12px; border-top: 1px solid #e2e8f0; background: #fff;
+              display: flex; align-items: center; gap: 12px; font-size: 11px; flex-wrap: wrap; }
+  button { background: #4f46e5; color: #fff; border: 0; border-radius: 6px;
+           padding: 4px 12px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  button.ghost { background: #e2e8f0; color: #334155; }
+  label { display: flex; align-items: center; gap: 6px; color: #475569; }
+  input[type=text] { width: 130px; border: 1px solid #cbd5e1; border-radius: 6px;
+                     padding: 3px 6px; font-family: inherit; font-size: 11px; }
+  input[type=range] { width: 80px; }
+  .val { color: #4f46e5; font-weight: 700; }
+</style>
+</head>
+<body>
+<header>Function Plot<span id="status">ready</span></header>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="controls">
+  <label>y = <input id="fn" type="text" style="width:170px"></label>
+  <button id="apply">Plot</button>
+  <button id="play">Trace</button>
+  <button id="reset" class="ghost">Reset</button>
+  <label>Speed <input id="speed" type="range" min="1" max="20" value="8"><span class="val" id="speedV">8</span></label>
+  <label>x range ±<input id="rng" type="range" min="2" max="50" value="10"><span class="val" id="rngV">10</span></label>
+</div>
+<script>
+const PARAMS = __PARAMS__;
+let fnStr = typeof PARAMS.fn === 'string' && PARAMS.fn.trim() ? PARAMS.fn.trim() : 'x^3 - 3*x';
+let xMin = Number.isFinite(Number(PARAMS.x_min)) ? Number(PARAMS.x_min) : -10;
+let xMax = Number.isFinite(Number(PARAMS.x_max)) ? Number(PARAMS.x_max) : 10;
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const status = document.getElementById('status');
+let f = null, varName = 'x';
+let playing = false, raf = null, tFrac = 1, last = 0, speed = 0.8;
+
+// ---------- math-notation parser ----------
+// Accepts: x^3 - 2x + 1, z^4, sin(x), 2x(x-1), e^x, sqrt(x), pi, superscripts,
+// implicit multiplication. Any single variable letter; functions/constants exempt.
+const F_IMPL = {
+  sin: Math.sin, cos: Math.cos, tan: Math.tan,
+  asin: Math.asin, acos: Math.acos, atan: Math.atan,
+  sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+  exp: Math.exp, ln: Math.log, log: Math.log, log10: Math.log10, log2: Math.log2,
+  sqrt: Math.sqrt, abs: Math.abs, sign: Math.sign,
+  ceil: Math.ceil, floor: Math.floor, round: Math.round,
+  min: Math.min, max: Math.max, pow: Math.pow,
+};
+const CONSTS = { pi: Math.PI, e: Math.E, tau: 2 * Math.PI, phi: (1 + Math.sqrt(5)) / 2 };
+const SUP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6',
+              '⁷': '7', '⁸': '8', '⁹': '9', '⁻': '-', '⁺': '+' };
+
+function preprocess(s) {
+  return s.replace(/\*\*/g, '^').replace(/−/g, '-').replace(/[×·]/g, '*').replace(/÷/g, '/')
+    .replace(/π/g, ' pi ').replace(/√/g, ' sqrt ')
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, m => '^(' + [...m].map(c => SUP[c]).join('') + ')');
+}
+
+function lex(s) {
+  s = preprocess(s);
+  const toks = []; let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (/\s/.test(c)) { i++; continue; }
+    let m;
+    if (m = /^(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?/.exec(s.slice(i))) {
+      toks.push({ t: 'num', v: +m[0] }); i += m[0].length; continue;
+    }
+    if (m = /^[a-zA-Z_][a-zA-Z0-9_]*/.exec(s.slice(i))) {
+      toks.push({ t: 'id', v: m[0].toLowerCase() }); i += m[0].length; continue;
+    }
+    if ('+-*/^'.includes(c)) { toks.push({ t: 'op', v: c }); i++; continue; }
+    if (c === '(') { toks.push({ t: 'lp' }); i++; continue; }
+    if (c === ')') { toks.push({ t: 'rp' }); i++; continue; }
+    if (c === ',') { toks.push({ t: 'cm' }); i++; continue; }
+    return null;
+  }
+  // insert implicit '*':  2x, 3(x+1), (x-1)(x+1), x sin(x)
+  const out = [];
+  for (const cur of toks) {
+    const prev = out[out.length - 1];
+    if (prev) {
+      const pEnd = prev.t === 'num' || prev.t === 'rp' || prev.t === 'id';
+      const cStart = cur.t === 'num' || cur.t === 'lp' || cur.t === 'id';
+      // a known function name absorbs the following primary — no '*' inserted
+      const isCall = prev.t === 'id' && F_IMPL[prev.v];
+      if (pEnd && cStart && !isCall) out.push({ t: 'op', v: '*' });
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
+let toks, pos;
+const peek = () => toks[pos];
+function add() {
+  let l = mul();
+  while (peek() && peek().t === 'op' && (peek().v === '+' || peek().v === '-')) {
+    const o = toks[pos++].v, r = mul(); l = { k: 'bin', o, l, r };
+  }
+  return l;
+}
+function mul() {
+  let l = unary();
+  while (peek() && peek().t === 'op' && (peek().v === '*' || peek().v === '/')) {
+    const o = toks[pos++].v, r = unary(); l = { k: 'bin', o, l, r };
+  }
+  return l;
+}
+function unary() {
+  if (peek() && peek().t === 'op' && (peek().v === '-' || peek().v === '+')) {
+    const o = toks[pos++].v, a = unary();
+    return o === '-' ? { k: 'neg', a } : a;
+  }
+  return power();
+}
+function power() { // right-assoc; -x^2 parses as -(x^2)
+  const b = primary();
+  if (peek() && peek().t === 'op' && peek().v === '^') {
+    pos++; return { k: 'bin', o: '^', l: b, r: unary() };
+  }
+  return b;
+}
+function primary() {
+  const tk = toks[pos++];
+  if (!tk) throw 'eof';
+  if (tk.t === 'num') return { k: 'num', v: tk.v };
+  if (tk.t === 'lp') {
+    const e = add();
+    if (!peek() || peek().t !== 'rp') throw 'paren';
+    pos++; return e;
+  }
+  if (tk.t === 'id') {
+    if (F_IMPL[tk.v]) {
+      if (peek() && peek().t === 'lp') {
+        pos++; const args = [add()];
+        while (peek() && peek().t === 'cm') { pos++; args.push(add()); }
+        if (!peek() || peek().t !== 'rp') throw 'paren';
+        pos++; return { k: 'call', n: tk.v, args };
+      }
+      return { k: 'call', n: tk.v, args: [power()] }; // "sin x" form
+    }
+    if (tk.v in CONSTS) return { k: 'num', v: CONSTS[tk.v] };
+    if (varName === null) varName = tk.v;
+    else if (varName !== tk.v) throw 'one variable only';
+    return { k: 'var' };
+  }
+  throw 'tok';
+}
+function ev(n, x) {
+  switch (n.k) {
+    case 'num': return n.v;
+    case 'var': return x;
+    case 'neg': return -ev(n.a, x);
+    case 'call': return F_IMPL[n.n](...n.args.map(a => ev(a, x)));
+    case 'bin': {
+      const l = ev(n.l, x), r = ev(n.r, x);
+      switch (n.o) {
+        case '+': return l + r; case '-': return l - r;
+        case '*': return l * r; case '/': return l / r;
+        case '^': return Math.pow(l, r);
+      }
+    }
+  }
+}
+function compileFn(src) {
+  try {
+    const L = lex(src);
+    if (!L || !L.length) throw 0;
+    toks = L; pos = 0; varName = null;
+    const node = add();
+    if (pos !== toks.length) throw 'trailing';
+    const v = varName || 'x';
+    return { f: x => ev(node, x), v };
+  } catch (e1) {
+    try { // JS-expression fallback (Math.sin(x) etc.)
+      // eslint-disable-next-line
+      const fn = new Function('x', 'Math', `return (${src});`);
+      if (!Number.isFinite(fn(1, Math))) throw 0;
+      return { f: x => fn(x, Math), v: 'x' };
+    } catch { return null; }
+  }
+}
+
+function draw() {
+  const w = cv.width, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#e2e8f0';
+  for (let gx = 10; gx < w; gx += 30) for (let gy = 10; gy < h; gy += 30) ctx.fillRect(gx, gy, 1.5, 1.5);
+  if (!f) { status.textContent = 'invalid expression'; return; }
+  const xspan = xMax - xMin;
+  const sx = (w - 40) / xspan;
+  const ox = 20 - xMin * sx;
+  // sample to find y range (bounded)
+  let yLo = Infinity, yHi = -Infinity;
+  const N = 400;
+  const ys = new Array(N);
+  for (let i = 0; i < N; i++) {
+    const xv = xMin + (i / (N - 1)) * xspan;
+    let yv = f(xv, Math);
+    if (!Number.isFinite(yv)) yv = null;
+    ys[i] = yv;
+    if (yv !== null && Math.abs(yv) < 1e6) { yLo = Math.min(yLo, yv); yHi = Math.max(yHi, yv); }
+  }
+  if (!Number.isFinite(yLo)) { status.textContent = 'function undefined on range'; return; }
+  if (yHi - yLo < 1e-9) { yLo -= 1; yHi += 1; }
+  const pad = (yHi - yLo) * 0.1; yLo -= pad; yHi += pad;
+  const sy = (h - 30) / (yHi - yLo);
+  const oy = 10 + yHi * sy;
+  // axes
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, h); ctx.stroke();
+  // ticks
+  ctx.fillStyle = '#94a3b8'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  const step = Math.pow(10, Math.floor(Math.log10(xspan / 4)));
+  for (let xv = Math.ceil(xMin / step) * step; xv <= xMax; xv += step) {
+    const px = ox + xv * sx;
+    ctx.fillRect(px - 0.5, oy - 3, 1, 6);
+    ctx.fillText(String(Math.round(xv * 100) / 100), px, oy + 12);
+  }
+  // faint full curve, then the traced portion drawn bold up to the tracer
+  const xt = xMin + tFrac * xspan;
+  ctx.lineWidth = 1.5;
+  for (const [col, upto] of [['#c7d2fe', 1], ['#4f46e5', tFrac]]) {
+    ctx.strokeStyle = col; ctx.beginPath();
+    let pen = false;
+    for (let i = 0; i < N; i++) {
+      const xv = xMin + (i / (N - 1)) * xspan;
+      if (xv > xt + xspan / N && col === '#4f46e5') break;
+      const yv = ys[i];
+      if (yv === null || Math.abs(yv) > 1e6) { pen = false; continue; }
+      const px = ox + xv * sx, py = oy - yv * sy;
+      if (pen && Math.abs(py - oy + ys[i - 1] * sy) > h * 0.8) pen = false; // asymptote guard
+      pen ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      pen = true;
+    }
+    ctx.stroke();
+  }
+  // x-intercepts (sign changes in the samples)
+  ctx.fillStyle = '#f59e0b';
+  for (let i = 1; i < N; i++) {
+    if (ys[i - 1] === null || ys[i] === null) continue;
+    if (ys[i - 1] * ys[i] < 0 && Math.abs(ys[i] - ys[i - 1]) < (yHi - yLo)) {
+      const xa = xMin + ((i - 1) / (N - 1)) * xspan, xb = xMin + (i / (N - 1)) * xspan;
+      const xr = xa - ys[i - 1] * (xb - xa) / (ys[i] - ys[i - 1]);
+      ctx.beginPath(); ctx.arc(ox + xr * sx, oy, 3.5, 0, 7); ctx.fill();
+    }
+  }
+  // tracer: dot + tangent + readout
+  const yt = f(xt, Math);
+  if (Number.isFinite(yt) && Math.abs(yt) < 1e6) {
+    const px = ox + xt * sx, py = oy - yt * sy;
+    const h0 = xspan / 400 || 1e-4;
+    const dy = (f(xt + h0, Math) - f(xt - h0, Math)) / (2 * h0);
+    if (Number.isFinite(dy)) {
+      const L = 40;
+      const m = Math.hypot(1, dy * sy / sx) || 1;
+      ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.5; ctx.beginPath();
+      ctx.moveTo(px - L / m, py + (dy * sy / sx) * L / m);
+      ctx.lineTo(px + L / m, py - (dy * sy / sx) * L / m);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath(); ctx.arc(px, py, 5, 0, 7); ctx.fill();
+    status.textContent = playing
+      ? `${varName}=${xt.toFixed(2)}  f(${varName})=${yt.toFixed(3)}  f'(${varName})=${Number.isFinite(dy) ? dy.toFixed(3) : '?'}  ${varName}∈[${xMin}, ${xMax}]`
+      : `f(${varName}) = ${fnStr}   ${varName}∈[${xMin}, ${xMax}]`;
+  } else {
+    status.textContent = `f(${varName}) = ${fnStr}   ${varName}∈[${xMin}, ${xMax}]`;
+  }
+}
+
+function frame(ts) {
+  if (!playing) return;
+  const dt = Math.min((ts - last) / 1000, 0.05); last = ts;
+  tFrac = Math.min(tFrac + dt * speed / 4, 1); // ~5s sweep at speed 1
+  draw();
+  if (tFrac >= 1) { stop(); return; }
+  raf = requestAnimationFrame(frame);
+}
+function play() {
+  if (playing) return;
+  if (tFrac >= 1) tFrac = 0;
+  playing = true; document.getElementById('play').textContent = 'Pause';
+  last = performance.now(); raf = requestAnimationFrame(frame);
+}
+function stop() {
+  playing = false; document.getElementById('play').textContent = 'Trace';
+  cancelAnimationFrame(raf);
+  draw();
+}
+
+function resize() {
+  const r = document.getElementById('stage').getBoundingClientRect();
+  cv.width = r.width; cv.height = r.height; draw();
+}
+
+document.getElementById('fn').value = fnStr;
+document.getElementById('apply').onclick = () => {
+  const src = document.getElementById('fn').value.trim();
+  const compiled = compileFn(src);
+  if (compiled) { f = compiled.f; varName = compiled.v; fnStr = src; tFrac = 1; draw(); }
+  else status.textContent = 'invalid expression';
+};
+document.getElementById('play').onclick = () => playing ? stop() : play();
+document.getElementById('reset').onclick = () => { stop(); tFrac = 0; draw(); };
+document.getElementById('speed').oninput = (e) => {
+  speed = Number(e.target.value) / 10;
+  document.getElementById('speedV').textContent = e.target.value;
+};
+document.getElementById('rng').oninput = (e) => {
+  const r = Number(e.target.value);
+  document.getElementById('rngV').textContent = r;
+  xMin = -r; xMax = r; draw();
+};
+const _c = compileFn(fnStr);
+f = _c ? _c.f : null; varName = _c ? _c.v : 'x';
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>
