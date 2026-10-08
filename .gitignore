@@ -18,4 +18,22 @@ venv/
 .idea/
 *.swp
 .DS_Store
-Thumbs.db
+Thumbs.db   
+
+ai4edu-main/
+
+# Cache trình quản lý gói (tạo cục bộ khi cài trong repo)
+.npm-cache/
+.pnpm-store/
+
+# Node / frontend: bỏ phụ thuộc, build, cache
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+.eslintcache
+.oxlintcache
+*.local
+
+# Template shadcn tải về chỉ để tham khảo, không commit
+shadcn-vite-template-main/
