@@ -172,6 +172,38 @@ export default function SettingsDialog({
             />
           </Field>
 
+          <Field
+            label="Sketch matching"
+            hint="How Analyze decides between a built-in template and generating a one-off simulation."
+          >
+            <select
+              className={cn(inputCls, 'cursor-pointer')}
+              value={
+                cfg.scenario_fast_path === true
+                  ? 'only'
+                  : cfg.scenario_fast_path === false
+                    ? 'never'
+                    : 'auto'
+              }
+              onChange={(e) =>
+                patch({
+                  scenario_fast_path:
+                    e.target.value === 'only'
+                      ? true
+                      : e.target.value === 'never'
+                        ? false
+                        : undefined,
+                })
+              }
+            >
+              <option value="auto">
+                Match a built-in item first, then generate (recommended)
+              </option>
+              <option value="only">Only match built-in items (no generation)</option>
+              <option value="never">Always generate, never match</option>
+            </select>
+          </Field>
+
           <div className="grid grid-cols-2 gap-3">
             <Field
               label="Analyze max tokens"
@@ -207,6 +239,26 @@ export default function SettingsDialog({
               />
             </Field>
           </div>
+
+          <Field
+            label="Match max tokens"
+            hint="Cap for the classify call. A reasoning model can spend this thinking, so raise it if matching returns nothing."
+          >
+            <input
+              className={inputCls}
+              type="number"
+              min={128}
+              value={cfg.classify_max_tokens ?? ''}
+              onChange={(e) =>
+                patch({
+                  classify_max_tokens: e.target.value
+                    ? Number(e.target.value)
+                    : undefined,
+                })
+              }
+              placeholder="1024"
+            />
+          </Field>
 
           <Field label="Temperature" hint="Unset = endpoint default.">
             <input

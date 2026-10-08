@@ -14,6 +14,7 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import type { AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
 
 import { analyzeSketch } from '../lib/llm';
+import { tryScenarioFastPath } from '../lib/classify';
 import { isGeneratedElement } from '../lib/artifacts';
 import type { LLMConfig } from '../lib/settings';
 import type { AnalyzeStatus, Artifact } from '../lib/types';
@@ -165,17 +166,55 @@ export function useAutoAnalyze({
     inFlightRef.current += 1;
     cbRef.current.setStatus('analyzing');
     try {
-      const result = await analyzeSketch(
-        cfg,
-        { imageBase64, sourceElementIds: sourceIds },
-        cfg.analyze_max_tokens,
-        abort.signal,
-      );
-      analyzedHashesRef.current.set(
-        result.id,
-        artifactSourceHash({ ...result, source_element_ids: sourceIds }, snapshot.elements),
-      );
-      cbRef.current.onResult(result, snapshot);
+      // Fast path first: one cheap classify call. A clear match instantiates
+      // the template locally, so nothing has to generate a simulation — which
+      // is what keeps this quick and stops a reasoning model from burning its
+      // whole budget thinking.
+      let result: Artifact | null = null;
+      if (cfg.scenario_fast_path !== false) {
+        try {
+          result = await tryScenarioFastPath(
+            cfg,
+            imageBase64,
+            { maxTokens: cfg.classify_max_tokens },
+            abort.signal,
+          );
+        } catch (e) {
+          // Classification is an optimisation — never let it sink the request
+          // when the user has explicitly asked for it to be authoritative.
+          if (abort.signal.aborted) throw e;
+          if (cfg.scenario_fast_path === true) throw e;
+          result = null;
+        }
+      }
+
+      if (result) {
+        // A template match is already placed; its source ids still drive the
+        // "board changed since analyze" staleness check.
+        analyzedHashesRef.current.set(
+          result.id,
+          artifactSourceHash(
+            { ...result, source_element_ids: sourceIds },
+            snapshot.elements,
+          ),
+        );
+        cbRef.current.onResult(result, snapshot);
+      } else {
+        const generated = await analyzeSketch(
+          cfg,
+          { imageBase64, sourceElementIds: sourceIds },
+          cfg.analyze_max_tokens,
+          abort.signal,
+        );
+        analyzedHashesRef.current.set(
+          generated.id,
+          artifactSourceHash(
+            { ...generated, source_element_ids: sourceIds },
+            snapshot.elements,
+          ),
+        );
+        cbRef.current.onResult(generated, snapshot);
+      }
     } catch (e) {
       // A user cancel rejects with AbortError — never an error state.
       if (!abort.signal.aborted) {

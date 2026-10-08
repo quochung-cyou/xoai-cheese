@@ -23,6 +23,14 @@ export interface LLMConfig {
    *  so a tight cap is what keeps it fast; the reference ai4edu flow capped its
    *  helper calls the same way. Refine keeps using `max_tokens`. */
   analyze_max_tokens?: number;
+  /** Token ceiling for the classify call (the fast path). */
+  classify_max_tokens?: number;
+  /**
+   * `undefined` (default) = try the template fast path, fall back to full
+   * generation if nothing matches. `true` = the fast path is authoritative.
+   * `false` = always generate.
+   */
+  scenario_fast_path?: boolean;
   /** off | low | medium | high — sent as OpenRouter/OpenAI-style reasoning. */
   reasoning_effort?: 'off' | 'low' | 'medium' | 'high';
   /** Exact thinking-token budget; beats reasoning_effort when both set. */
@@ -65,6 +73,9 @@ const DEFAULT_CONFIG: LLMConfig = {
   // Small on purpose: the analyze document is short, and a tight cap makes it
   // come back fast. Raise it if a simulation comes back truncated.
   analyze_max_tokens: 4096,
+  // The classifier emits one small JSON object. A reasoning model can still
+  // spend this on thinking, so it gets its own knob.
+  classify_max_tokens: 1024,
   // Env values win over the literal defaults, per-field.
   ...(ENV_DEFAULTS.base_url ? { base_url: ENV_DEFAULTS.base_url } : {}),
   ...(ENV_DEFAULTS.api_key ? { api_key: ENV_DEFAULTS.api_key } : {}),

@@ -30,6 +30,8 @@ interface Seen {
 
 const seen: Seen[] = [];
 let nextReply = '';
+/** When set, the endpoint returns this body verbatim (for failure shapes). */
+let nextForced: unknown = null;
 
 const server = createServer((req: IncomingMessage, res: ServerResponse) => {
   // Static asset route: serve the real exported templates/data files.
@@ -67,7 +69,7 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     seen.push({ url: req.url ?? '', body, accept: req.headers.accept as string | undefined });
 
     // One call shape: a complete, non-streaming chat completion.
-    const payload = {
+    const payload = nextForced ?? {
       id: 'chatcmpl-test',
       object: 'chat.completion',
       model: 'test-model',
@@ -283,6 +285,160 @@ console.log('wire — completeChatEvents yields exactly one output');
   );
   check('completeChat returns the text', text === 'buffered', text);
   check('still one POST', seen.length === 1, String(seen.length));
+}
+
+// ---------------------------------------------------------------------------
+// The classify-first fast path. This is the behaviour that matters: a matching
+// sketch must never need a full simulation generated, because a reasoning model
+// will spend the entire budget thinking and return `content: ""`.
+// ---------------------------------------------------------------------------
+
+const { tryScenarioFastPath, classifySketch } = await import(
+  '../src/magic-board/lib/classify.ts'
+);
+
+/** The system prompt of the first request that looks like the classifier. */
+function classifyRequest() {
+  return seen.find((s) => {
+    const msgs = s.body.messages as { content?: unknown }[] | undefined;
+    const sys = msgs?.[0]?.content;
+    return typeof sys === 'string' && sys.includes('fast sketch classifier');
+  });
+}
+
+/** The system prompt of a generation (analyze) request. */
+function generationRequest() {
+  return seen.find((s) => {
+    const msgs = s.body.messages as { content?: unknown }[] | undefined;
+    const sys = msgs?.[0]?.content;
+    return typeof sys === 'string' && sys.includes('multimodal STEM engine');
+  });
+}
+
+console.log('classify — the prompt carries the whole catalog');
+{
+  replyWith(JSON.stringify({ scenario: null, params: {}, observation: 'nothing clear' }));
+  await classifySketch(CFG, 'AAAA');
+
+  const req = classifyRequest();
+  check('a classify request was made', req !== undefined);
+  const sys = String((req!.body.messages as { content: string }[])[0]!.content);
+  check('catalog placeholder was substituted', !sys.includes('{{SCENARIOS}}'));
+  check('catalog lists the 3D anatomy item', sys.includes('**anatomy_3d**'));
+  check('catalog lists the equation plot', sys.includes('**function_plot**'));
+  check('each entry carries its params spec', sys.includes('params:'));
+  check(
+    'classify is capped by classify_max_tokens',
+    req!.body.max_tokens === 1024,
+    String(req!.body.max_tokens),
+  );
+  check('classify asks for JSON', JSON.stringify(req!.body.response_format) === '{"type":"json_object"}');
+}
+
+console.log('classify — a clear match spawns the template, no generation');
+{
+  replyWith(
+    JSON.stringify({
+      scenario: 'sphere',
+      params: { radius: 0.9 },
+      observation: 'A shaded ball with an equator.',
+    }),
+  );
+
+  const artifact = await tryScenarioFastPath(CFG, 'AAAA');
+  check('a template artifact was produced', artifact !== null);
+  check('kind is scenario', artifact!.kind === 'scenario', artifact!.kind);
+  check('payload names the template', artifact!.payload.scenario === 'sphere');
+  check('params came from the classifier', artifact!.payload.params?.radius === 0.9);
+  check(
+    'the template was rendered locally (no model)',
+    (artifact!.payload.html ?? '').includes('importmap'),
+    (artifact!.payload.html ?? '').slice(0, 80),
+  );
+  check('title derived from the template', artifact!.title === 'sphere', artifact!.title);
+  check(
+    'the observation leads the analysis',
+    (artifact!.analysis?.observation ?? '').startsWith('A shaded ball'),
+    artifact!.analysis?.observation,
+  );
+  check('exactly ONE request was made', seen.length === 1, String(seen.length));
+  check('and it was the small classify call', generationRequest() === undefined);
+}
+
+console.log('classify — "3d heart" style sketch resolves to the anatomy template');
+{
+  replyWith(
+    JSON.stringify({
+      scenario: 'anatomy_3d',
+      params: { focus: 'heart' },
+      observation: 'The label “3d heart”.',
+    }),
+  );
+  const artifact = await tryScenarioFastPath(CFG, 'AAAA');
+  check('heart matched the 3D anatomy template', artifact?.payload.scenario === 'anatomy_3d');
+  check('focus param carried through', artifact?.payload.params?.focus === 'heart');
+  check('title reads as anatomy', artifact?.title === 'Anatomy: heart', artifact?.title);
+  check(
+    'the real anatomy viewer was rendered',
+    (artifact?.payload.html ?? '').includes('structures.json'),
+  );
+  check('only one request', seen.length === 1, String(seen.length));
+}
+
+console.log('classify — no match falls through to generation');
+{
+  replyWith(JSON.stringify({ scenario: null, params: {}, observation: 'a doodle' }));
+  const artifact = await tryScenarioFastPath(CFG, 'AAAA');
+  check('null scenario yields no artifact', artifact === null);
+  check('only the classify call happened', seen.length === 1, String(seen.length));
+}
+
+console.log('classify — an unknown id is not trusted');
+{
+  replyWith(JSON.stringify({ scenario: 'not_a_real_template', params: {} }));
+  const artifact = await tryScenarioFastPath(CFG, 'AAAA');
+  check('unknown ids fall back to generation', artifact === null);
+}
+
+console.log('classify — narration instead of JSON is tolerated by the caller');
+{
+  // A model that ignores json_mode may still wrap the object in prose; the
+  // classifier must not explode on it.
+  replyWith('Sure! {"scenario":"torus","params":{},"observation":"a donut"}');
+  const artifact = await tryScenarioFastPath(CFG, 'AAAA');
+  check('prose-wrapped JSON still matches', artifact?.payload.scenario === 'torus', artifact?.payload.scenario);
+}
+
+console.log('classify — a starved reasoning model is reported clearly');
+{
+  // Exactly the observed failure: reasoning ate the whole budget.
+  seen.length = 0;
+  nextReply = '';
+  nextForced = {
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: '',
+          reasoning_content: 'thinking... '.repeat(50),
+        },
+        finish_reason: 'length',
+      },
+    ],
+  };
+  let msg = '';
+  try {
+    await classifySketch(CFG, 'AAAA');
+  } catch (e) {
+    msg = e instanceof Error ? e.message : String(e);
+  }
+  check(
+    'the empty-content/length case explains itself',
+    msg.includes('cut off') && msg.includes('max tokens'),
+    msg,
+  );
+  nextForced = null;
 }
 
 server.close();

@@ -390,4 +390,39 @@ export function scenarioArtifact(inst: InstantiatedScenario): Artifact {
   };
 }
 
+// ------------------------------------------------------------ classification
+
+/**
+ * The scenario catalog as the classifier prompt sees it — the same bullet block
+ * ai4edu's `catalog_text()` built (`**id** — match` + its params spec).
+ */
+export function buildCatalogText(metas: Record<string, ScenarioMeta>): string {
+  const lines = Object.values(metas)
+    .filter((m) => m.id && m.match && m.params)
+    .map((m) => `- **${m.id}** — ${m.match}\n  params: ${m.params}`);
+  return lines.length ? lines.join('\n') : '(none registered)';
+}
+
+const metaCacheAll = new Map<string, ScenarioMeta | null>();
+
+/** Load the metadata for every catalogued scenario (cached per id). */
+export async function loadAllMetas(): Promise<Record<string, ScenarioMeta>> {
+  const out: Record<string, ScenarioMeta> = {};
+  await Promise.all(
+    SCENARIO_IDS.map(async (id) => {
+      const cached = metaCacheAll.get(id);
+      const meta = cached !== undefined ? cached : await getMeta(id);
+      metaCacheAll.set(id, meta);
+      if (meta) out[id] = { ...meta, id };
+    }),
+  );
+  return out;
+}
+
+export interface ClassifyHint {
+  scenario: string | null;
+  params: Record<string, unknown>;
+  observation: string;
+}
+
 export { ASSET_BASE };
