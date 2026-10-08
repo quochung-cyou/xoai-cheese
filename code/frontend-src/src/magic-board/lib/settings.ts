@@ -1,69 +1,72 @@
 /**
- * Magic Board settings — model credentials, supplied entirely at runtime.
+ * Cấu hình Bảng Ma Thuật — thông tin xác thực mô hình, hoàn toàn do người dùng
+ * cung cấp lúc chạy.
  *
- * This is a pure client-side app. There is deliberately **no build-time
- * configuration**: nothing is read from `VITE_*`, so no credential is ever
- * baked into the JS bundle and every deployment ships the same artifact.
+ * Đây là ứng dụng thuần phía máy khách (client-side). Cố ý **không có cấu hình
+ * lúc build**: không đọc gì từ `VITE_*`, nên không có thông tin xác thực nào bị
+ * nhúng vào gói JS và mọi bản triển khai đều phát hành cùng một sản phẩm build.
  *
- * The only layer is localStorage — whatever the user typed in the in-app
- * Settings dialog. `DEFAULT_CONFIG` just seeds the dialog's placeholders.
+ * Tầng duy nhất là localStorage — đúng những gì người dùng đã nhập trong hộp
+ * thoại Cài đặt của ứng dụng. `DEFAULT_CONFIG` chỉ khởi tạo các giá trị gợi ý
+ * (placeholder) cho hộp thoại đó.
  *
- * Nothing here is a backend: these values are read in the browser and sent
- * straight to the model endpoint the user configured.
+ * Ở đây không có backend nào: những giá trị này được đọc trong trình duyệt và
+ * gửi thẳng tới điểm cuối (endpoint) mô hình mà người dùng đã cấu hình.
  */
 
 export interface LLMConfig {
-  /** Endpoint root or full chat URL, e.g. https://api.openai.com/v1. */
+  /** Điểm cuối (endpoint) gốc hoặc URL chat đầy đủ, ví dụ https://api.openai.com/v1. */
   base_url: string;
   api_key: string;
   model: string;
   temperature?: number;
   max_tokens?: number;
   top_p?: number;
-  /** Token ceiling for the analyze call only. The analyze document is short,
-   *  so a tight cap is what keeps it fast; the reference ai4edu flow capped its
-   *  helper calls the same way. Refine keeps using `max_tokens`. */
+  /** Mức trần token chỉ riêng cho lời gọi phân tích. Tài liệu phân tích ngắn,
+   *  nên một giới hạn chặt là thứ giữ cho nó nhanh; luồng ai4edu tham chiếu
+   *  cũng giới hạn các lời gọi trợ giúp theo cách tương tự. Bước tinh chỉnh vẫn
+   *  dùng `max_tokens`. */
   analyze_max_tokens?: number;
-  /** Token ceiling for the classify call (the fast path). */
+  /** Mức trần token cho lời gọi phân loại (đường nhanh). */
   classify_max_tokens?: number;
   /**
-   * `undefined` (default) = try the template fast path, fall back to full
-   * generation if nothing matches. `true` = the fast path is authoritative.
-   * `false` = always generate.
+   * `undefined` (mặc định) = thử đường nhanh dùng mẫu, nếu không khớp thì quay
+   * về sinh đầy đủ. `true` = đường nhanh là quyết định. `false` = luôn sinh mới.
    */
   scenario_fast_path?: boolean;
-  /** off | low | medium | high — sent as OpenRouter/OpenAI-style reasoning. */
+  /** off | low | medium | high — gửi theo kiểu reasoning của OpenRouter/OpenAI. */
   reasoning_effort?: 'off' | 'low' | 'medium' | 'high';
-  /** Exact thinking-token budget; beats reasoning_effort when both set. */
+  /** Ngân sách token suy luận chính xác; đè lên reasoning_effort khi cả hai được đặt. */
   reasoning_max_tokens?: number;
-  /** Text injected before the end-of-thinking tag when the budget runs out
-   *  (llama.cpp only — ignored elsewhere). */
+  /** Văn bản chèn trước thẻ kết thúc suy luận khi hết ngân sách
+   *  (chỉ llama.cpp — nơi khác bỏ qua). */
   reasoning_budget_message?: string;
 }
 
 const STORAGE_KEY = 'magic-board.llm-config';
 const HOTKEY_KEY = 'magic-board.analyze-hotkey';
 
-/** Seed values for the Settings dialog. `api_key` is always empty: a key is
- *  runtime input and must never be committed or compiled in. */
+/** Giá trị khởi tạo cho hộp thoại Cài đặt. `api_key` luôn rỗng: khóa là dữ
+ *  liệu nhập lúc chạy, không bao giờ được commit hay biên dịch vào. */
 const DEFAULT_CONFIG: LLMConfig = {
   base_url: 'https://api.openai.com/v1',
   api_key: '',
   model: 'gpt-4o',
   temperature: undefined,
   max_tokens: 16000,
-  // Small on purpose: the analyze document is short, and a tight cap makes it
-  // come back fast. Raise it if a simulation comes back truncated.
+  // Cố ý nhỏ: tài liệu phân tích ngắn, và một giới hạn chặt giúp nó
+  // trả về nhanh. Tăng lên nếu mô phỏng trả về bị cụt.
   analyze_max_tokens: 4096,
-  // The classifier emits one small JSON object. A reasoning model can still
-  // spend this on thinking, so it gets its own knob.
+  // Bộ phân loại chỉ phát ra một đối tượng JSON nhỏ. Mô hình suy luận vẫn có
+  // thể tiêu vào việc suy nghĩ, nên nó có núm riêng.
   classify_max_tokens: 1024,
 };
 
-/** Normalize a user-pasted endpoint into a full chat-completions URL.
+/** Chuẩn hóa điểm cuối (endpoint) do người dùng dán thành URL chat-completions
+ *  đầy đủ.
  *  - 'https://api.openai.com/v1'                -> .../v1/chat/completions
- *  - 'https://host/api/v1/chat'                 -> kept as-is
- *  - 'https://host/api/v1/chat/completions'     -> kept as-is
+ *  - 'https://host/api/v1/chat'                 -> giữ nguyên
+ *  - 'https://host/api/v1/chat/completions'     -> giữ nguyên
  */
 export function endpointUrl(baseUrl: string): string {
   const b = baseUrl.trim().replace(/\/+$/, '');
@@ -86,30 +89,30 @@ export function saveLLMConfig(cfg: LLMConfig): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
 }
 
-/** True when the board has everything it needs to make a call. */
+/** True khi bảng đã có đủ mọi thứ cần thiết để thực hiện một lời gọi. */
 export function isConfigured(cfg: LLMConfig): boolean {
   return Boolean(cfg.base_url.trim() && cfg.model.trim() && cfg.api_key.trim());
 }
 
-/** Short label for the composer's settings chip / status pill. */
+/** Nhãn ngắn cho chip cài đặt / viên trạng thái của ô soạn thảo. */
 export function modelLabel(cfg: LLMConfig): string {
-  if (!cfg.model.trim()) return 'no model set';
+  if (!cfg.model.trim()) return 'chưa đặt mô hình';
   const host = (() => {
     try {
       return new URL(cfg.base_url).host;
     } catch {
-      return cfg.base_url || 'no endpoint';
+      return cfg.base_url || 'chưa có điểm cuối (endpoint)';
     }
   })();
   return `${cfg.model} · ${host}`;
 }
 
-// ---- Analyze hotkey ------------------------------------------------------
+// ---- Phím tắt phân tích --------------------------------------------------
 
 const DEFAULT_HOTKEY = 'g';
 
-/** Stored as KeyboardEvent.key (single char lowercased, or named keys like
- *  'F2', 'Enter'). Empty/whitespace falls back to the default. */
+/** Lưu dưới dạng KeyboardEvent.key (một ký tự viết thường, hoặc tên phím như
+ *  'F2', 'Enter'). Rỗng/khoảng trắng sẽ quay về giá trị mặc định. */
 export function loadAnalyzeHotkey(): string {
   try {
     const raw = localStorage.getItem(HOTKEY_KEY);

@@ -1,0 +1,6 @@
+{
+  "match": "phòng thí nghiệm điện từ Faraday, từ trường, nam châm, cuộn dây, cảm ứng điện từ; mô phỏng tương tác tiếng Việt",
+  "params": "{} — mô phỏng PhET độc lập, các điều khiển nằm trong mô phỏng",
+  "param_defaults": {},
+  "title_template": "Phòng thí nghiệm điện từ Faraday (Tiếng Việt)"
+}

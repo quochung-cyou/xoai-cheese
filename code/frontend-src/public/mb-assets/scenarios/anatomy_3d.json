@@ -7,12 +7,12 @@
     "systems": [],
     "isolate": true
   },
-  "title_template": "Anatomy: {focus}",
+  "title_template": "Giải phẫu: {focus}",
   "analysis": {
     "details_file": "atlas/structures.json",
     "key_param": "focus",
     "require_resolved": true,
-    "observation_template": "3D anatomy viewer focused on \"{label}\".",
+    "observation_template": "Trình xem giải phẫu 3D tập trung vào \"{label}\".",
     "notes_fields": [
       "description"
     ]

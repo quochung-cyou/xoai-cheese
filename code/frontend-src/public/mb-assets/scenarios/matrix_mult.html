@@ -1,30 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head><script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Yêu cầu thất bại';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>
 <meta charset="utf-8">
 <style>
@@ -80,15 +81,15 @@ button:hover{background:#eef2ff;border-color:var(--indigo);color:var(--indigo);}
 <body>
 <div class="app">
 <header>
-<h1>Matrix Multiplication <span>C = A · B, C[i][j] = Σₖ A[i][k]·B[k][j]</span></h1>
-<div id="status">Ready</div>
+<h1>Phép nhân ma trận <span>C = A · B, C[i][j] = Σₖ A[i][k]·B[k][j]</span></h1>
+<div id="status">Sẵn sàng</div>
 </header>
 <div class="banner" id="banner"></div>
 <div class="controls">
-<div class="ctl"><b>Delay</b><input type="range" id="delay" min="120" max="1200" step="60" value="500"><span id="dv">500ms</span></div>
-<button id="play">&#9654; Play</button>
-<button id="step">Step</button>
-<button id="reset">Reset</button>
+<div class="ctl"><b>Độ trễ</b><input type="range" id="delay" min="120" max="1200" step="60" value="500"><span id="dv">500ms</span></div>
+<button id="play">&#9654; Phát</button>
+<button id="step">Từng bước</button>
+<button id="reset">Đặt lại</button>
 </div>
 <div class="mats">
 <div class="mat"><h2 id="at"></h2><div class="grid" id="aGrid"></div></div>
@@ -101,7 +102,7 @@ button:hover{background:#eef2ff;border-color:var(--indigo);color:var(--indigo);}
 <div class="eq" id="eq">&mdash;</div>
 <div class="chips" id="chips"></div>
 </div>
-<div class="foot">Indigo cell = current A[i][k]&middot;B[k][j] term &middot; lavender = row of A in use &middot; blue = column of B in use &middot; green = finished C cell</div>
+<div class="foot">Ô màu chàm = số hạng A[i][k]&middot;B[k][j] hiện tại &middot; màu tím nhạt = hàng của A đang dùng &middot; màu xanh dương = cột của B đang dùng &middot; màu xanh lục = ô của C đã tính xong</div>
 </div>
 <script>
 (function(){
@@ -174,16 +175,16 @@ function flashCell(r, c){ var cell = cCells[r][c]; cell.classList.add('flash'); 
 function resetRun(){
   if (timer){ clearTimeout(timer); timer = null; }
   running = false; done = false; i = 0; j = 0; k = 0; acc = 0; lastK = -1;
-  $('play').innerHTML = '&#9654; Play';
+  $('play').innerHTML = '&#9654; Phát';
   for (var r = 0; r < m; r++) for (var c = 0; c < p; c++) C[r][c] = null;
   var b = $('banner');
   if (!compatible()){
     b.classList.add('show');
-    b.textContent = 'Incompatible dimensions: A is ' + m + '×' + na + ' and B is ' + nb + '×' + p + '. Inner dimensions must match (cols of A = rows of B).';
-    setStatus('Error: incompatible dimensions', 'err');
+    b.textContent = 'Kích thước không tương thích: A là ' + m + '×' + na + ' và B là ' + nb + '×' + p + '. Kích thước trong phải khớp (số cột của A = số hàng của B).';
+    setStatus('Lỗi: kích thước không tương thích', 'err');
   } else {
     b.classList.remove('show');
-    setStatus('Ready', '');
+    setStatus('Sẵn sàng', '');
   }
   render('idle');
 }
@@ -201,8 +202,8 @@ function tick(){
     if (j >= p){ j = 0; i++; }
     if (i >= m){
       running = false; done = true;
-      setStatus('Computation complete', '');
-      $('play').innerHTML = '&#8635; Replay';
+      setStatus('Tính toán hoàn tất', '');
+      $('play').innerHTML = '&#8635; Phát lại';
       render('done');
       return;
     }
@@ -216,8 +217,8 @@ function render(state){
   for (r = 0; r < nb; r++) for (c = 0; c < p; c++) bCells[r][c].classList.remove('hl-col', 'hl-term');
   for (r = 0; r < m; r++) for (c = 0; c < p; c++){ cCells[r][c].className = 'cell'; cCells[r][c].textContent = C[r][c] === null ? '·' : fmt(C[r][c]); }
   var eq = $('eq'), chips = $('chips');
-  if (!compatible()){ eq.textContent = 'Cannot multiply: ' + m + '×' + na + ' · ' + nb + '×' + p; chips.innerHTML = ''; return; }
-  if (state === 'done' || done){ eq.innerHTML = '<b>C</b> = A · B — all ' + (m * p) + ' entries computed'; chips.innerHTML = ''; return; }
+  if (!compatible()){ eq.textContent = 'Không thể nhân: ' + m + '×' + na + ' · ' + nb + '×' + p; chips.innerHTML = ''; return; }
+  if (state === 'done' || done){ eq.innerHTML = '<b>C</b> = A · B — đã tính xong toàn bộ ' + (m * p) + ' phần tử'; chips.innerHTML = ''; return; }
   for (c = 0; c < na; c++) aCells[i][c].classList.add('hl-row');
   for (r = 0; r < nb; r++) bCells[r][j].classList.add('hl-col');
   if (state !== 'doneCell' && lastK >= 0){ aCells[i][lastK].classList.add('hl-term'); bCells[lastK][j].classList.add('hl-term'); }
@@ -226,7 +227,7 @@ function render(state){
   if (state === 'doneCell'){
     eq.innerHTML = '<b>C[' + (i+1) + '][' + (j+1) + ']</b> = ∑<sub>k=1</sub><sup>' + na + '</sup> A[' + (i+1) + '][k]·B[k][' + (j+1) + '] = <b style="color:#059669">' + fmt(C[i][j]) + '</b>';
   } else {
-    eq.innerHTML = '<b>C[' + (i+1) + '][' + (j+1) + ']</b> = ∑<sub>k=1</sub><sup>' + na + '</sup> A[' + (i+1) + '][k]·B[k][' + (j+1) + '] &nbsp;▸ partial = <b style="color:#059669">' + fmt(acc) + '</b>';
+    eq.innerHTML = '<b>C[' + (i+1) + '][' + (j+1) + ']</b> = ∑<sub>k=1</sub><sup>' + na + '</sup> A[' + (i+1) + '][k]·B[k][' + (j+1) + '] &nbsp;▸ tạm tính = <b style="color:#059669">' + fmt(acc) + '</b>';
   }
   chips.innerHTML = '';
   for (var t = 0; t < na; t++){
@@ -246,15 +247,15 @@ $('play').addEventListener('click', function(){
   if (!compatible()) return;
   if (done) resetRun();
   running = !running;
-  if (running){ $('play').innerHTML = '&#10074;&#10074; Pause'; setStatus('Computing…', ''); tick(); }
-  else { $('play').innerHTML = '&#9654; Play'; if (timer){ clearTimeout(timer); timer = null; } setStatus('Paused', 'warn'); }
+  if (running){ $('play').innerHTML = '&#10074;&#10074; Tạm dừng'; setStatus('Đang tính…', ''); tick(); }
+  else { $('play').innerHTML = '&#9654; Phát'; if (timer){ clearTimeout(timer); timer = null; } setStatus('Đã tạm dừng', 'warn'); }
 });
 $('step').addEventListener('click', function(){
   if (!compatible()) return;
   if (done) resetRun();
-  if (running){ running = false; $('play').innerHTML = '&#9654; Play'; if (timer){ clearTimeout(timer); timer = null; } }
+  if (running){ running = false; $('play').innerHTML = '&#9654; Phát'; if (timer){ clearTimeout(timer); timer = null; } }
   tick();
-  if (!done) setStatus('Stepped', 'warn');
+  if (!done) setStatus('Đã chuyển bước', 'warn');
 });
 $('reset').addEventListener('click', function(){
   A = DEF_A.map(function(r){ return r.slice(); });

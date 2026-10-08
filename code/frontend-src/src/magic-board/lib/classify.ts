@@ -1,20 +1,19 @@
 /**
- * Sketch classification — the fast path of the ai4edu analyze pipeline.
+ * Phân loại bản phác thảo — đường nhanh của đường ống phân tích ai4edu.
  *
- * Port of `backend/app/services/analysis.py` phase 0 plus
- * `backend/prompts/classify.txt`: one cheap vision call decides whether the
- * sketch clearly matches a built-in template, and if it does, the template is
- * instantiated locally. No simulation code is generated at all.
+ * Bản chuyển từ giai đoạn 0 của `backend/app/services/analysis.py` cộng với
+ * `backend/prompts/classify.txt`: một lời gọi thị giác rẻ tiền quyết định xem
+ * bản phác thảo có khớp rõ ràng với một mẫu dựng sẵn hay không, và nếu có thì
+ * mẫu được khởi tạo ngay tại chỗ. Không có mã mô phỏng nào được sinh ra cả.
  *
- * Why this matters beyond speed: asking a model to write a whole HTML
- * simulation in one shot makes a reasoning model spend its entire budget
- * thinking (`finish_reason: "length"`, `content: ""`, every token counted as
- * `reasoning_tokens`). Classifying is a ~100-token decision, so it answers fast
- * and cannot be starved by its own reasoning.
+ * Vì sao điều này quan trọng hơn cả tốc độ: yêu cầu mô hình viết cả một mô phỏng
+ * HTML trong một lần khiến mô hình suy luận tiêu hết ngân sách vào việc suy nghĩ
+ * (`finish_reason: "length"`, `content: ""`, mọi token đều bị tính là
+ * `reasoning_tokens`). Phân loại chỉ là một quyết định tốn ~100 token, nên nó
+ * trả lời nhanh và không thể bị chính việc suy luận của mình bỏ đói.
  *
- * Embedding-based retrieval is deliberately not ported — the catalog is small
- * enough to hand the classifier whole, exactly as ai4edu does when retrieval is
- * off.
+ * Truy hồi dựa trên embedding bị cố ý không chuyển sang — danh mục đủ nhỏ để đưa
+ * nguyên vẹn cho bộ phân loại, đúng như ai4edu làm khi tắt truy hồi.
  */
 import { chat, LlmError, parseLlmJson } from './llm';
 import { PROMPT_CLASSIFY } from './prompts';
@@ -28,16 +27,17 @@ import {
 import type { LLMConfig } from './settings';
 import type { Artifact } from './types';
 
-/** Token budget for the classifier. It emits one small JSON object; the
- *  reference used 2048 and measured ~3s thinking for ~100 tokens of output. */
+/** Ngân sách token cho bộ phân loại. Nó chỉ phát ra một đối tượng JSON nhỏ; bản
+ *  tham chiếu dùng 2048 và đo được ~3 giây suy nghĩ cho ~100 token kết quả. */
 export const DEFAULT_CLASSIFY_MAX_TOKENS = 1024;
 
 export interface ClassifyResult extends ClassifyHint {
-  /** The template id actually matched, or null. */
+  /** Id mẫu thực sự được khớp, hoặc null. */
   scenario: string | null;
 }
 
-/** The model's raw view of a sketch: scenario id + params + one-line caption. */
+/** Góc nhìn thô của mô hình về một bản phác thảo: id kịch bản + params + chú
+ *  thích một dòng. */
 export async function classifySketch(
   cfg: LLMConfig,
   imageBase64: string,
@@ -73,12 +73,13 @@ export async function classifySketch(
 
   const parsed = parseLlmJson(text);
   if (!parsed || typeof parsed !== 'object') {
-    throw new LlmError('The classifier returned an unexpected shape.');
+    throw new LlmError('Bộ phân loại trả về cấu trúc không mong đợi.');
   }
   const p = parsed as Record<string, unknown>;
 
   const rawScenario = typeof p.scenario === 'string' ? p.scenario.trim() : '';
-  // Only ids we actually ship count; anything else falls back to generation.
+  // Chỉ những id thực sự được phát hành mới được tính; mọi thứ khác đều quay về
+  // sinh mới.
   const scenario = rawScenario && rawScenario in metas ? rawScenario : null;
 
   return {
@@ -92,10 +93,10 @@ export async function classifySketch(
 }
 
 /**
- * Classify, then instantiate the matched template locally.
+ * Phân loại, rồi khởi tạo mẫu được khớp ngay tại chỗ.
  *
- * Returns null when the sketch does not clearly match anything, so the caller
- * can fall back to full generation (the ai4edu "generate anyway" path).
+ * Trả về null khi bản phác thảo không khớp rõ ràng với mẫu nào, để bên gọi có
+ * thể quay về sinh đầy đủ (đường "cứ sinh thôi" của ai4edu).
  */
 export async function tryScenarioFastPath(
   cfg: LLMConfig,
@@ -107,12 +108,12 @@ export async function tryScenarioFastPath(
   if (!hint.scenario) return null;
 
   const inst = await instantiate(hint.scenario, hint.params);
-  // A template that cannot satisfy the sketch's params must not ship a wrong
-  // viewer — fall back to generation, as the reference does.
+  // Một mẫu không đáp ứng được params của bản phác thảo thì không được phát hành
+  // một trình xem sai — hãy quay về sinh mới, đúng như bản tham chiếu làm.
   if (!inst.resolved) return null;
 
-  // Lead the analysis with the classifier's own reading of the sketch, which is
-  // what the user actually drew.
+  // Mở đầu phần phân tích bằng chính cách bộ phân loại đọc bản phác thảo, tức
+  // là thứ người dùng thực sự đã vẽ.
   if (hint.observation) {
     inst.analysis = {
       observation: inst.analysis?.observation

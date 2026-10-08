@@ -1,30 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head><script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing Ã¢â¬â
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'YÃÂªu cÃ¡ÂºÂ§u thÃ¡ÂºÂ¥t bÃ¡ÂºÂ¡i';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' Ã¢â¬â '+r.url;
+    if(e&&e.filename) return msg+' Ã¢â¬â '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>
 <meta charset="utf-8">
 <style>
@@ -49,15 +50,15 @@ addEventListener('unhandledrejection', function(e){
 </style>
 </head>
 <body>
-<header>Function Plot<span id="status">ready</span></header>
+<header>ÃÂÃ¡Â»â thÃ¡Â»â¹ hÃÂ m sÃ¡Â»â<span id="status">sÃ¡ÂºÂµn sÃÂ ng</span></header>
 <div id="stage"><canvas id="cv"></canvas></div>
 <div id="controls">
   <label>y = <input id="fn" type="text" style="width:170px"></label>
-  <button id="apply">Plot</button>
-  <button id="play">Trace</button>
-  <button id="reset" class="ghost">Reset</button>
-  <label>Speed <input id="speed" type="range" min="1" max="20" value="8"><span class="val" id="speedV">8</span></label>
-  <label>x range ±<input id="rng" type="range" min="2" max="50" value="10"><span class="val" id="rngV">10</span></label>
+  <button id="apply">VÃ¡ÂºÂ½ ÃâÃ¡Â»â thÃ¡Â»â¹</button>
+  <button id="play">DÃÂ²</button>
+  <button id="reset" class="ghost">ÃÂÃ¡ÂºÂ·t lÃ¡ÂºÂ¡i</button>
+  <label>TÃ¡Â»âc ÃâÃ¡Â»â¢ <input id="speed" type="range" min="1" max="20" value="8"><span class="val" id="speedV">8</span></label>
+  <label>miÃ¡Â»Ân x ÃÂ±<input id="rng" type="range" min="2" max="50" value="10"><span class="val" id="rngV">10</span></label>
 </div>
 <script>
 const PARAMS = __PARAMS__;
@@ -70,9 +71,9 @@ const status = document.getElementById('status');
 let f = null, varName = 'x';
 let playing = false, raf = null, tFrac = 1, last = 0, speed = 0.8;
 
-// ---------- math-notation parser ----------
-// Accepts: x^3 - 2x + 1, z^4, sin(x), 2x(x-1), e^x, sqrt(x), pi, superscripts,
-// implicit multiplication. Any single variable letter; functions/constants exempt.
+// ---------- bÃ¡Â»â¢ phÃÂ¢n tÃÂ­ch kÃÂ½ phÃÂ¡p toÃÂ¡n hÃ¡Â»Âc ----------
+// ChÃ¡ÂºÂ¥p nhÃ¡ÂºÂ­n: x^3 - 2x + 1, z^4, sin(x), 2x(x-1), e^x, sqrt(x), pi, chÃ¡Â»â° sÃ¡Â»â trÃÂªn,
+// phÃÂ©p nhÃÂ¢n Ã¡ÂºÂ©n. MÃ¡Â»â¢t chÃ¡Â»Â¯ cÃÂ¡i biÃ¡ÂºÂ¿n bÃ¡ÂºÂ¥t kÃ¡Â»Â³; hÃÂ m/hÃ¡ÂºÂ±ng sÃ¡Â»â ÃâÃÂ°Ã¡Â»Â£c miÃ¡Â»â¦n.
 const F_IMPL = {
   sin: Math.sin, cos: Math.cos, tan: Math.tan,
   asin: Math.asin, acos: Math.acos, atan: Math.atan,
@@ -83,13 +84,13 @@ const F_IMPL = {
   min: Math.min, max: Math.max, pow: Math.pow,
 };
 const CONSTS = { pi: Math.PI, e: Math.E, tau: 2 * Math.PI, phi: (1 + Math.sqrt(5)) / 2 };
-const SUP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6',
-              '⁷': '7', '⁸': '8', '⁹': '9', '⁻': '-', '⁺': '+' };
+const SUP = { 'Ã¢ÂÂ°': '0', 'ÃÂ¹': '1', 'ÃÂ²': '2', 'ÃÂ³': '3', 'Ã¢ÂÂ´': '4', 'Ã¢ÂÂµ': '5', 'Ã¢ÂÂ¶': '6',
+              'Ã¢ÂÂ·': '7', 'Ã¢ÂÂ¸': '8', 'Ã¢ÂÂ¹': '9', 'Ã¢ÂÂ»': '-', 'Ã¢ÂÂº': '+' };
 
 function preprocess(s) {
-  return s.replace(/\*\*/g, '^').replace(/−/g, '-').replace(/[×·]/g, '*').replace(/÷/g, '/')
-    .replace(/π/g, ' pi ').replace(/√/g, ' sqrt ')
-    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, m => '^(' + [...m].map(c => SUP[c]).join('') + ')');
+  return s.replace(/\*\*/g, '^').replace(/Ã¢Ëâ/g, '-').replace(/[ÃâÃÂ·]/g, '*').replace(/ÃÂ·/g, '/')
+    .replace(/Ãâ¬/g, ' pi ').replace(/Ã¢ËÅ¡/g, ' sqrt ')
+    .replace(/[Ã¢ÂÂ°ÃÂ¹ÃÂ²ÃÂ³Ã¢ÂÂ´Ã¢ÂÂµÃ¢ÂÂ¶Ã¢ÂÂ·Ã¢ÂÂ¸Ã¢ÂÂ¹Ã¢ÂÂ»Ã¢ÂÂº]+/g, m => '^(' + [...m].map(c => SUP[c]).join('') + ')');
 }
 
 function lex(s) {
@@ -111,14 +112,14 @@ function lex(s) {
     if (c === ',') { toks.push({ t: 'cm' }); i++; continue; }
     return null;
   }
-  // insert implicit '*':  2x, 3(x+1), (x-1)(x+1), x sin(x)
+  // chÃÂ¨n dÃ¡ÂºÂ¥u '*' Ã¡ÂºÂ©n:  2x, 3(x+1), (x-1)(x+1), x sin(x)
   const out = [];
   for (const cur of toks) {
     const prev = out[out.length - 1];
     if (prev) {
       const pEnd = prev.t === 'num' || prev.t === 'rp' || prev.t === 'id';
       const cStart = cur.t === 'num' || cur.t === 'lp' || cur.t === 'id';
-      // a known function name absorbs the following primary — no '*' inserted
+      // tÃÂªn hÃÂ m ÃâÃÂ£ biÃ¡ÂºÂ¿t sÃ¡ÂºÂ½ hÃ¡ÂºÂ¥p thÃ¡Â»Â¥ toÃÂ¡n hÃ¡ÂºÂ¡ng ÃâÃ¡Â»Â©ng sau Ã¢â¬â khÃÂ´ng chÃÂ¨n '*'
       const isCall = prev.t === 'id' && F_IMPL[prev.v];
       if (pEnd && cStart && !isCall) out.push({ t: 'op', v: '*' });
     }
@@ -150,7 +151,7 @@ function unary() {
   }
   return power();
 }
-function power() { // right-assoc; -x^2 parses as -(x^2)
+function power() { // kÃ¡ÂºÂ¿t hÃ¡Â»Â£p phÃ¡ÂºÂ£i; -x^2 ÃâÃÂ°Ã¡Â»Â£c phÃÂ¢n tÃÂ­ch thÃÂ nh -(x^2)
   const b = primary();
   if (peek() && peek().t === 'op' && peek().v === '^') {
     pos++; return { k: 'bin', o: '^', l: b, r: unary() };
@@ -174,11 +175,11 @@ function primary() {
         if (!peek() || peek().t !== 'rp') throw 'paren';
         pos++; return { k: 'call', n: tk.v, args };
       }
-      return { k: 'call', n: tk.v, args: [power()] }; // "sin x" form
+      return { k: 'call', n: tk.v, args: [power()] }; // dÃ¡ÂºÂ¡ng "sin x"
     }
     if (tk.v in CONSTS) return { k: 'num', v: CONSTS[tk.v] };
     if (varName === null) varName = tk.v;
-    else if (varName !== tk.v) throw 'one variable only';
+    else if (varName !== tk.v) throw 'chÃ¡Â»â° cho phÃÂ©p mÃ¡Â»â¢t biÃ¡ÂºÂ¿n';
     return { k: 'var' };
   }
   throw 'tok';
@@ -199,7 +200,13 @@ function ev(n, x) {
     }
   }
 }
+function stripEquation(s) {
+  // "y = x^2", "f(x) = sin(x)", "y=x²" — a plot is the right-hand side.
+  const eq = String(s).lastIndexOf('=');
+  return (eq >= 0 ? String(s).slice(eq + 1) : String(s)).trim();
+}
 function compileFn(src) {
+  src = stripEquation(src);
   try {
     const L = lex(src);
     if (!L || !L.length) throw 0;
@@ -209,7 +216,7 @@ function compileFn(src) {
     const v = varName || 'x';
     return { f: x => ev(node, x), v };
   } catch (e1) {
-    try { // JS-expression fallback (Math.sin(x) etc.)
+    try { // dÃ¡Â»Â± phÃÂ²ng bÃ¡ÂºÂ±ng biÃ¡Â»Æu thÃ¡Â»Â©c JS (Math.sin(x), v.v.)
       // eslint-disable-next-line
       const fn = new Function('x', 'Math', `return (${src});`);
       if (!Number.isFinite(fn(1, Math))) throw 0;
@@ -223,11 +230,11 @@ function draw() {
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#e2e8f0';
   for (let gx = 10; gx < w; gx += 30) for (let gy = 10; gy < h; gy += 30) ctx.fillRect(gx, gy, 1.5, 1.5);
-  if (!f) { status.textContent = 'invalid expression'; return; }
+  if (!f) { status.textContent = 'biÃ¡Â»Æu thÃ¡Â»Â©c khÃÂ´ng hÃ¡Â»Â£p lÃ¡Â»â¡'; return; }
   const xspan = xMax - xMin;
   const sx = (w - 40) / xspan;
   const ox = 20 - xMin * sx;
-  // sample to find y range (bounded)
+  // lÃ¡ÂºÂ¥y mÃ¡ÂºÂ«u ÃâÃ¡Â»Æ tÃÂ¬m miÃ¡Â»Ân y (cÃÂ³ chÃ¡ÂºÂ·n)
   let yLo = Infinity, yHi = -Infinity;
   const N = 400;
   const ys = new Array(N);
@@ -238,16 +245,16 @@ function draw() {
     ys[i] = yv;
     if (yv !== null && Math.abs(yv) < 1e6) { yLo = Math.min(yLo, yv); yHi = Math.max(yHi, yv); }
   }
-  if (!Number.isFinite(yLo)) { status.textContent = 'function undefined on range'; return; }
+  if (!Number.isFinite(yLo)) { status.textContent = 'hÃÂ m khÃÂ´ng xÃÂ¡c ÃâÃ¡Â»â¹nh trÃÂªn miÃ¡Â»Ân xÃÂ©t'; return; }
   if (yHi - yLo < 1e-9) { yLo -= 1; yHi += 1; }
   const pad = (yHi - yLo) * 0.1; yLo -= pad; yHi += pad;
   const sy = (h - 30) / (yHi - yLo);
   const oy = 10 + yHi * sy;
-  // axes
+  // trÃ¡Â»Â¥c tÃ¡Â»Âa ÃâÃ¡Â»â¢
   ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, h); ctx.stroke();
-  // ticks
+  // vÃ¡ÂºÂ¡ch chia
   ctx.fillStyle = '#94a3b8'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
   const step = Math.pow(10, Math.floor(Math.log10(xspan / 4)));
   for (let xv = Math.ceil(xMin / step) * step; xv <= xMax; xv += step) {
@@ -255,7 +262,7 @@ function draw() {
     ctx.fillRect(px - 0.5, oy - 3, 1, 6);
     ctx.fillText(String(Math.round(xv * 100) / 100), px, oy + 12);
   }
-  // faint full curve, then the traced portion drawn bold up to the tracer
+  // ÃâÃÂ°Ã¡Â»Âng cong mÃ¡Â»Â ÃâÃ¡ÂºÂ§y ÃâÃ¡Â»Â§, rÃ¡Â»âi vÃ¡ÂºÂ½ ÃâÃ¡ÂºÂ­m phÃ¡ÂºÂ§n ÃâÃÂ£ dÃÂ² tÃ¡Â»âºi ÃâiÃ¡Â»Æm dÃÂ²
   const xt = xMin + tFrac * xspan;
   ctx.lineWidth = 1.5;
   for (const [col, upto] of [['#c7d2fe', 1], ['#4f46e5', tFrac]]) {
@@ -267,13 +274,13 @@ function draw() {
       const yv = ys[i];
       if (yv === null || Math.abs(yv) > 1e6) { pen = false; continue; }
       const px = ox + xv * sx, py = oy - yv * sy;
-      if (pen && Math.abs(py - oy + ys[i - 1] * sy) > h * 0.8) pen = false; // asymptote guard
+      if (pen && Math.abs(py - oy + ys[i - 1] * sy) > h * 0.8) pen = false; // chÃ¡Â»âng tiÃ¡Â»â¡m cÃ¡ÂºÂ­n
       pen ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
       pen = true;
     }
     ctx.stroke();
   }
-  // x-intercepts (sign changes in the samples)
+  // giao ÃâiÃ¡Â»Æm vÃ¡Â»âºi trÃ¡Â»Â¥c x (ÃâÃ¡Â»â¢i dÃ¡ÂºÂ¥u giÃ¡Â»Â¯a cÃÂ¡c mÃ¡ÂºÂ«u)
   ctx.fillStyle = '#f59e0b';
   for (let i = 1; i < N; i++) {
     if (ys[i - 1] === null || ys[i] === null) continue;
@@ -283,7 +290,7 @@ function draw() {
       ctx.beginPath(); ctx.arc(ox + xr * sx, oy, 3.5, 0, 7); ctx.fill();
     }
   }
-  // tracer: dot + tangent + readout
+  // ÃâiÃ¡Â»Æm dÃÂ²: chÃ¡ÂºÂ¥m + tiÃ¡ÂºÂ¿p tuyÃ¡ÂºÂ¿n + sÃ¡Â»â liÃ¡Â»â¡u
   const yt = f(xt, Math);
   if (Number.isFinite(yt) && Math.abs(yt) < 1e6) {
     const px = ox + xt * sx, py = oy - yt * sy;
@@ -300,17 +307,17 @@ function draw() {
     ctx.fillStyle = '#ef4444';
     ctx.beginPath(); ctx.arc(px, py, 5, 0, 7); ctx.fill();
     status.textContent = playing
-      ? `${varName}=${xt.toFixed(2)}  f(${varName})=${yt.toFixed(3)}  f'(${varName})=${Number.isFinite(dy) ? dy.toFixed(3) : '?'}  ${varName}∈[${xMin}, ${xMax}]`
-      : `f(${varName}) = ${fnStr}   ${varName}∈[${xMin}, ${xMax}]`;
+      ? `${varName}=${xt.toFixed(2)}  f(${varName})=${yt.toFixed(3)}  f'(${varName})=${Number.isFinite(dy) ? dy.toFixed(3) : '?'}  ${varName}Ã¢ËË[${xMin}, ${xMax}]`
+      : `f(${varName}) = ${fnStr}   ${varName}Ã¢ËË[${xMin}, ${xMax}]`;
   } else {
-    status.textContent = `f(${varName}) = ${fnStr}   ${varName}∈[${xMin}, ${xMax}]`;
+    status.textContent = `f(${varName}) = ${fnStr}   ${varName}Ã¢ËË[${xMin}, ${xMax}]`;
   }
 }
 
 function frame(ts) {
   if (!playing) return;
   const dt = Math.min((ts - last) / 1000, 0.05); last = ts;
-  tFrac = Math.min(tFrac + dt * speed / 4, 1); // ~5s sweep at speed 1
+  tFrac = Math.min(tFrac + dt * speed / 4, 1); // quÃÂ©t ~5 giÃÂ¢y Ã¡Â»Å¸ tÃ¡Â»âc ÃâÃ¡Â»â¢ 1
   draw();
   if (tFrac >= 1) { stop(); return; }
   raf = requestAnimationFrame(frame);
@@ -318,11 +325,11 @@ function frame(ts) {
 function play() {
   if (playing) return;
   if (tFrac >= 1) tFrac = 0;
-  playing = true; document.getElementById('play').textContent = 'Pause';
+  playing = true; document.getElementById('play').textContent = 'TÃ¡ÂºÂ¡m dÃ¡Â»Â«ng';
   last = performance.now(); raf = requestAnimationFrame(frame);
 }
 function stop() {
-  playing = false; document.getElementById('play').textContent = 'Trace';
+  playing = false; document.getElementById('play').textContent = 'DÃÂ²';
   cancelAnimationFrame(raf);
   draw();
 }
@@ -337,7 +344,7 @@ document.getElementById('apply').onclick = () => {
   const src = document.getElementById('fn').value.trim();
   const compiled = compileFn(src);
   if (compiled) { f = compiled.f; varName = compiled.v; fnStr = src; tFrac = 1; draw(); }
-  else status.textContent = 'invalid expression';
+  else status.textContent = 'biÃ¡Â»Æu thÃ¡Â»Â©c khÃÂ´ng hÃ¡Â»Â£p lÃ¡Â»â¡';
 };
 document.getElementById('play').onclick = () => playing ? stop() : play();
 document.getElementById('reset').onclick = () => { stop(); tFrac = 0; draw(); };
@@ -353,7 +360,15 @@ document.getElementById('rng').oninput = (e) => {
 const _c = compileFn(fnStr);
 f = _c ? _c.f : null; varName = _c ? _c.v : 'x';
 window.addEventListener('resize', resize);
+// Redraw when the host sizes the iframe — the first layout of a spawned iframe
+// can happen after this script runs, and a canvas sized 0x0 draws nothing.
+if (typeof ResizeObserver !== 'undefined') {
+  const ro = new ResizeObserver(() => resize());
+  ro.observe(document.getElementById('stage'));
+  ro.observe(document.body);
+}
 resize();
+requestAnimationFrame(() => resize());
 </script>
 </body>
 </html>

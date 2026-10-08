@@ -1,0 +1,6 @@
+{
+  "match": "Faraday electromagnetic laboratory, magnet, coil, electromagnetic induction; original English simulation",
+  "params": "{} — standalone PhET simulation with its own controls",
+  "param_defaults": {},
+  "title_template": "Faraday’s Electromagnetic Lab (EN)"
+}

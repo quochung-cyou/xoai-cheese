@@ -1,12 +1,12 @@
 import type { Artifact } from '../../lib/types';
 
 export const KIND_LABELS: Record<Artifact['kind'], string> = {
-  html_sim: 'Sim',
-  scenario: 'Sim',
-  elements: 'Diagram',
+  html_sim: 'Mô phỏng',
+  scenario: 'Mô phỏng',
+  elements: 'Sơ đồ',
 };
 
-/** Message header time — 'Apr 2 · 14:35' or just '14:35' for today. */
+/** Thời gian ở đầu tin nhắn — '2 thg 4 · 14:35' hoặc chỉ '14:35' nếu là hôm nay. */
 export function fmtAt(iso?: string): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -16,8 +16,8 @@ export function fmtAt(iso?: string): string {
     d.getFullYear() === today.getFullYear() &&
     d.getMonth() === today.getMonth() &&
     d.getDate() === today.getDate();
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   return sameDay
     ? time
-    : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${time}`;
+    : `${d.toLocaleDateString('vi-VN', { month: 'short', day: 'numeric' })} · ${time}`;
 }

@@ -61,8 +61,22 @@ const THREE_ADDONS_CDN = `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/ex
 const ASSET_PREFIX = '/mb-assets/';
 
 /** Scenarios whose template cannot work without assets that are not in the
- *  repo (book reader PDFs). */
-const SKIP = new Set(['book']);
+ *  repo. Currently empty — `book` is included, but it needs its PDF dropped
+ *  into `public/mb-assets/books/` (see the note in that folder). */
+const SKIP = new Set<string>();
+
+/**
+ * Renames applied to every template so they speak this app's protocol rather
+ * than ai4edu's. These are the artifact↔host globals: `lib/artifactDoc.ts`
+ * injects `__MAGIC_BOARD_ARTIFACT_ID__` and `lib/artifacts.ts` listens for
+ * `source: 'magic-board'`, so a template using the old names would never
+ * receive its saved state.
+ */
+const BRIDGE_RENAMES: [RegExp, string][] = [
+  [/__AI4EDU_ARTIFACT_ID__/g, '__MAGIC_BOARD_ARTIFACT_ID__'],
+  // Both the outgoing `source:` field and the incoming comparison.
+  [/'ai4edu'/g, "'magic-board'"],
+];
 
 /**
  * The whole URL rewrite, longest pattern first.
@@ -95,8 +109,102 @@ const REPLACEMENTS: [RegExp, string][] = [
 /** A `const API = …` declaration left behind now that nothing uses it. */
 const DEAD_API_CONST_RE = /[ \t]*const API = [^\n]*\n/;
 
+/**
+ * Book-only hardening.
+ *
+ * The reader is the one template whose data comes from a file an operator is
+ * expected to edit (`books/catalog.json`), so its entry shape is not really
+ * fixed: `file` may be spelled `path` / `pdf` / `src`, and a hand-made catalog
+ * can easily produce an entry with no usable path at all.
+ *
+ * PDF.js reports a missing path as `Invalid PDF url data: either string or
+ * URL-object is expected in the url property`, which names neither the entry
+ * nor the field. This hook normalizes the known spellings and, when there is
+ * still no path, reports the catalog shape instead — so the failure points at
+ * the catalog rather than at PDF.js.
+ */
+const BOOK_TRANSFORMS: [string, string][] = [
+  [
+    'async function main() {',
+    `function pdfPathOf(entry) {
+  // Accept the sensible spellings; first non-empty string wins.
+  for (const k of ['file', 'path', 'pdf', 'src', 'url']) {
+    const v = entry && entry[k];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  // Last resort: any string value in the entry that looks like a PDF path.
+  for (const v of Object.values(entry || {})) {
+    if (typeof v === 'string' && /\\.pdf(\\?|$)/i.test(v)) return v;
+  }
+  return '';
+}
+
+async function main() {`,
+  ],
+  [
+    'const entry = resolveBook(data, PARAMS.book);',
+    `const entry = resolveBook(data, PARAMS.book);
+  // Name the exact problem instead of letting PDF.js report a bare type error.
+  if (!entry) {
+    const known = Object.keys(data && data.entries ? data.entries : {});
+    fail('No catalog entry for "' + String(PARAMS.book) +
+      '". Catalog keys: ' + (known.join(', ') || '(none)'));
+    return;
+  }
+  const pdfPath = pdfPathOf(entry);
+  if (!pdfPath) {
+    fail('Catalog entry "' + (entry.name || '?') +
+      '" has no PDF path. Entry keys: ' + Object.keys(entry).join(', '));
+    return;
+  }`,
+  ],
+  [
+    'url: `/mb-assets/${entry.file}`,',
+    'data: pdfBytes,',
+  ],
+  [
+    'if (!entry || !entry.file) {',
+    'if (!entry || !pdfPathOf(entry)) {',
+  ],
+  // Fetch the bytes explicitly. PDF.js validates `url` with
+  // `URL.parse(url, window.location)`; inside a sandboxed `srcdoc` iframe the
+  // document URL is `about:srcdoc`, which is not a valid base, so that parse
+  // returns null and PDF.js throws "Invalid PDF url data..." WITHOUT making a
+  // request. It is the same opaque-origin problem that affects every other
+  // asset lookup in these documents.
+  //
+  // Passing `data:` sidesteps URL resolution entirely, and a 404 then surfaces
+  // as a readable message instead of a type error. `cMapUrl` /
+  // `standardFontDataUrl` stay as strings — PDF.js loads those through a plain
+  // fetch, which resolves relative asset paths fine.
+  //
+  // Anchored on the `getDocument` call, not on surrounding copy, because the
+  // overlay wording is localised (and localisation must not break the export).
+  [
+    'const doc = await pdfjsLib.getDocument({',
+    `const pdfUrl = \`/mb-assets/\${pdfPath}\`;
+  const pdfRes = await fetch(pdfUrl);
+  if (!pdfRes.ok) {
+    fail(pdfUrl + ' -> HTTP ' + pdfRes.status +
+      (pdfRes.status === 404
+        ? ' (thiếu tệp: hãy đặt PDF vào public/mb-assets/books/)'
+        : ''));
+    return;
+  }
+  const pdfBytes = new Uint8Array(await pdfRes.arrayBuffer());
+  const doc = await pdfjsLib.getDocument({`,
+  ],
+];
+
 /** Every static absolute asset URL the transformed document will request. */
 const ASSET_URL_RE = /(['"`])(\/mb-assets\/[^'"`\s]*?)\1/g;
+
+/**
+ * Asset files that are legitimately absent from the repo and must be supplied
+ * by the operator. `book` ships its viewer and catalog but not the PDF itself
+ * (the book is copyrighted material), so its URL is reported, not enforced.
+ */
+const OPERATOR_SUPPLIED = [/^\/mb-assets\/books\/.*\.pdf$/i];
 
 /** A document-relative path into the asset tree — unresolvable in a srcdoc
  *  iframe, and the exact bug this script exists to prevent. */
@@ -114,31 +222,80 @@ const DOC_RELATIVE_RE = /['"`]\.\.?\/+(?:atlas|vendor|books|scenarios|mb-assets)
  * unaffected.
  */
 const ERROR_REPORTER = `<script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \\u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Request failed';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>`;
+
+/**
+ * Vietnamese diacritics. Used only to *detect* localised copy — the exporter
+ * itself is language-agnostic and never rewrites prose.
+ *
+ * Covers the base-vowel diacritic ranges (à á ả ã ạ è é … ỹ) plus the
+ * Vietnamese-only letters đ and the horned/breve vowels ơ ư ă. `â ê ô` are
+ * deliberately excluded: they are common in French and Portuguese, so on their
+ * own they are not evidence of Vietnamese.
+ */
+const VN_CHARS =
+  /[đĐơƠưƯăĂ]|[\u00e0-\u00e5\u00e8-\u00eb\u00ec-\u00ef\u00f2-\u00f6\u00f9-\u00fc\u00fd\u00ff]|[\u1ea0-\u1ef9]/;
+
+/**
+ * A hard stop before overwriting localised templates.
+ *
+ * `npm run scenarios:export` regenerates every file in `public/mb-assets/` from
+ * the English templates under `ai4edu-main/`. Those exported files are
+ * **committed to git** and their UI copy is Vietnamese, so a routine export
+ * silently reverts the whole localization — which is exactly what happened once
+ * already: a single export wiped 16 hand-translated templates with no error and
+ * no diff to review.
+ *
+ * The guard compares the copy that is about to be written against what is
+ * already on disk. If the outgoing template is unlocalised while the shipped one
+ * is localised, that is a regression, and the run aborts listing the files
+ * instead of destroying the work.
+ *
+ * Translate the templates under `SCENARIOS_SRC` and re-export to clear this;
+ * set `MB_ALLOW_UNLOCALIZED_EXPORT=1` to override deliberately (e.g. when you
+ * are about to re-apply the localization afterwards).
+ */
+function guardLocalizedOverwrite(
+  outDir: string,
+  ids: string[],
+  rendered: Map<string, string>,
+  ext: string,
+): string[] {
+  const regressions: string[] = [];
+  for (const id of ids) {
+    const file = join(outDir, `${id}${ext}`);
+    if (!existsSync(file)) continue;
+    const onDisk = readFileSync(file, 'utf8');
+    const next = rendered.get(id) ?? '';
+    if (VN_CHARS.test(onDisk) && !VN_CHARS.test(next)) regressions.push(`${id}${ext}`);
+  }
+  return regressions;
+}
 
 function main() {
   if (!existsSync(SRC)) {
@@ -152,6 +309,8 @@ function main() {
   const skipped: string[] = [];
   const problems: string[] = [];
   const dynamicUrls: string[] = [];
+  const operatorSupplied = new Set<string>();
+  const rendered = new Map<string, string>();
   let assetUrlsChecked = 0;
 
   for (const file of files) {
@@ -164,6 +323,24 @@ function main() {
     let html = readFileSync(join(SRC, file), 'utf8');
     for (const [pattern, replacement] of REPLACEMENTS) {
       html = html.replace(pattern, replacement);
+    }
+    for (const [pattern, replacement] of BRIDGE_RENAMES) {
+      html = html.replace(pattern, replacement);
+    }
+    // Per-template hardening, applied after the generic rewrites.
+    if (id === 'book') {
+      let applied = 0;
+      for (const [needle, replacement] of BOOK_TRANSFORMS) {
+        if (html.includes(needle)) {
+          html = html.replace(needle, replacement);
+          applied++;
+        } else {
+          problems.push(`book: expected snippet not found -> ${needle.slice(0, 60)}`);
+        }
+      }
+      if (applied !== BOOK_TRANSFORMS.length) {
+        problems.push(`book: only ${applied}/${BOOK_TRANSFORMS.length} transforms applied`);
+      }
     }
     // Drop the now-unused runtime base constant so nothing can reintroduce a
     // document-relative URL through it.
@@ -214,7 +391,11 @@ function main() {
       assetUrlsChecked++;
       const onDisk = join(PUBLIC, url.replace(/^\//, ''));
       if (!existsSync(onDisk)) {
-        problems.push(`${id}: static asset URL does not exist -> ${url}`);
+        if (OPERATOR_SUPPLIED.some((re) => re.test(url))) {
+          operatorSupplied.add(url);
+        } else {
+          problems.push(`${id}: static asset URL does not exist -> ${url}`);
+        }
       }
     }
 
@@ -246,19 +427,50 @@ function main() {
       }
     }
 
-    writeFileSync(join(OUT, file), html, 'utf8');
+    rendered.set(id, html);
     written.push(id);
   }
 
+  // Render the metadata up front so the guard below can see it too.
   const metaFiles = readdirSync(SRC).filter((f) => f.endsWith('.json'));
-  let metas = 0;
+  const renderedMeta = new Map<string, string>();
+  const metaIds: string[] = [];
   for (const file of metaFiles) {
     const id = file.replace(/\.json$/, '');
     if (SKIP.has(id)) continue;
     const meta = JSON.parse(readFileSync(join(SRC, file), 'utf8'));
-    writeFileSync(join(OUT, file), JSON.stringify(meta, null, 2) + '\n', 'utf8');
-    metas++;
+    renderedMeta.set(id, JSON.stringify(meta, null, 2) + '\n');
+    metaIds.push(id);
   }
+
+  // Refuse to clobber localised templates (see guardLocalizedOverwrite).
+  if (!process.env.MB_ALLOW_UNLOCALIZED_EXPORT) {
+    const regressions = [
+      ...guardLocalizedOverwrite(OUT, written, rendered, '.html'),
+      ...guardLocalizedOverwrite(OUT, metaIds, renderedMeta, '.json'),
+    ];
+    if (regressions.length) {
+      console.error(
+        '\nREFUSING TO EXPORT — this run would replace Vietnamese files with English ones:\n',
+      );
+      for (const name of regressions) console.error(`  - ${name}`);
+      console.error(
+        `\n${regressions.length} of ${written.length + metaIds.length} files would regress.` +
+          '\nThe shipped files under public/mb-assets/scenarios are committed and localized.' +
+          '\nTranslate the templates in the source tree first, or set' +
+          '\nMB_ALLOW_UNLOCALIZED_EXPORT=1 to override.\n',
+      );
+      process.exit(1);
+    }
+  }
+
+  for (const id of written) {
+    writeFileSync(join(OUT, `${id}.html`), rendered.get(id)!, 'utf8');
+  }
+  for (const id of metaIds) {
+    writeFileSync(join(OUT, `${id}.json`), renderedMeta.get(id)!, 'utf8');
+  }
+  let metas = metaIds.length;
 
   console.log(`Wrote ${written.length} templates + ${metas} metas to ${OUT}`);
   console.log(`  three.js        : ${THREE_CDN}`);
@@ -266,6 +478,11 @@ function main() {
   console.log(`  static asset URLs: ${assetUrlsChecked} verified on disk`);
   if (dynamicUrls.length) {
     console.log(`  runtime-built URLs: ${dynamicUrls.length} (chunk list, checked separately)`);
+  }
+  if (operatorSupplied.size) {
+    console.log(
+      `  awaiting operator  : ${[...operatorSupplied].join(', ')} (drop the file in public/)`,
+    );
   }
   console.log(`  skipped         : ${skipped.join(', ') || '(none)'}`);
   if (problems.length) {

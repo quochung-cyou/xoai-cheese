@@ -1,27 +1,27 @@
 /**
- * LLM client for the Magic Board — the entire "backend" of the original
- * ai4edu app, reduced to what the browser actually needs.
+ * Trình khách LLM (LLM client) cho Bảng Ma Thuật — toàn bộ "backend" của ứng
+ * dụng ai4edu gốc, rút gọn còn đúng những gì trình duyệt thực sự cần.
  *
- * What moved here from the FastAPI service:
- *  - provider adapter (OpenAI-style /chat/completions) — one plain POST per
- *    call, no SSE
- *  - the analyze pipeline (vision prompt -> JSON -> artifact)
- *  - the refine pipeline (model response -> SEARCH/REPLACE scanner -> payload)
+ * Những gì được chuyển từ dịch vụ FastAPI sang đây:
+ *  - bộ thích ứng nhà cung cấp (provider adapter, kiểu OpenAI
+ *    /chat/completions) — mỗi lời gọi là một POST đơn giản, không dùng SSE
+ *  - đường ống phân tích (prompt thị giác -> JSON -> kết quả)
+ *  - đường ống tinh chỉnh (phản hồi mô hình -> bộ quét SEARCH/REPLACE -> payload)
  *
- * Prompts and pipeline stages are unchanged from the reference; only the
- * transport differs. The refine scanner already handles a whole response
- * arriving at once, so feeding it a single event is equivalent to the old
- * token stream — the UI simply updates in one step instead of progressively.
+ * Prompt và các bước của đường ống giữ nguyên như bản tham chiếu; chỉ phần
+ * truyền tải là khác. Bộ quét tinh chỉnh vốn đã xử lý được cả phản hồi đến một
+ * lần, nên nạp cho nó một sự kiện duy nhất tương đương với luồng token cũ —
+ * giao diện chỉ cập nhật một bước thay vì cập nhật dần.
  *
- * What was deliberately dropped: scenario classification + template
- * retrieval, embeddings, Gemini's native API, SQLite persistence, auth.
- * The board calls the model endpoint directly with the user's own key.
+ * Những gì bị cố ý bỏ: phân loại kịch bản + truy hồi mẫu (template), embedding,
+ * API gốc của Gemini, lưu trữ SQLite, xác thực.
+ * Bảng gọi thẳng điểm cuối (endpoint) mô hình bằng khóa của chính người dùng.
  */
 import { endpointUrl, type LLMConfig } from './settings';
 import { PROMPT_ANALYZE_USER, PROMPT_SIMULATION } from './prompts';
 import type { Artifact, ArtifactAnalysis, SkeletonElement } from './types';
 
-// ---------------------------------------------------------------- errors
+// ------------------------------------------------------------------- lỗi
 
 export class LlmError extends Error {
   status?: number;
@@ -32,7 +32,7 @@ export class LlmError extends Error {
   }
 }
 
-/** Turn a fetch/HTTP failure into something a human can act on. */
+/** Biến một lỗi fetch/HTTP thành thông báo mà con người có thể xử lý được. */
 function explainFailure(status: number, bodyText: string, url: string): string {
   let detail = bodyText.slice(0, 300);
   try {
@@ -43,22 +43,22 @@ function explainFailure(status: number, bodyText: string, url: string): string {
     const msg = parsed.error?.message ?? parsed.message;
     if (typeof msg === 'string' && msg) detail = msg;
   } catch {
-    /* non-JSON error body */
+    /* phần thân lỗi không phải JSON */
   }
   if (status === 401 || status === 403) {
-    return `The endpoint rejected the API key (${status}). Check it in Settings. — ${detail}`;
+    return `Điểm cuối (endpoint) từ chối khóa API (API key) (${status}). Hãy kiểm tra trong phần Cài đặt. — ${detail}`;
   }
   if (status === 404) {
-    return `No model endpoint at ${url} (404). Check the base URL and model name. — ${detail}`;
+    return `Không có điểm cuối (endpoint) mô hình tại ${url} (404). Hãy kiểm tra URL gốc và tên mô hình. — ${detail}`;
   }
   if (status === 429) {
-    return `Rate limited or out of quota (429). — ${detail}`;
+    return `Bị giới hạn tốc độ hoặc hết hạn mức (429). — ${detail}`;
   }
-  return `Endpoint ${url} returned ${status}: ${detail}`;
+  return `Điểm cuối (endpoint) ${url} trả về ${status}: ${detail}`;
 }
 
-/** Fetch that explains a CORS/network failure instead of surfacing
- *  "TypeError: Failed to fetch", which tells the user nothing. */
+/** Fetch có giải thích lỗi CORS/mạng thay vì để lộ ra "TypeError: Failed to
+ *  fetch", vốn chẳng nói gì cho người dùng. */
 async function postJson(
   cfg: LLMConfig,
   body: unknown,
@@ -79,9 +79,9 @@ async function postJson(
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
     throw new LlmError(
-      `Could not reach ${url}. Either the network is down, the URL is wrong, ` +
-        `or the endpoint blocks browser requests (CORS) — a local model ` +
-        `server needs --cors/Origin enabled. (${e instanceof Error ? e.message : String(e)})`,
+      `Không thể kết nối tới ${url}. Có thể mạng đang hỏng, URL sai, ` +
+        `hoặc điểm cuối (endpoint) chặn yêu cầu từ trình duyệt (CORS) — máy chủ ` +
+        `mô hình cục bộ cần bật --cors/Origin. (${e instanceof Error ? e.message : String(e)})`,
     );
   }
   if (!res.ok) {
@@ -91,12 +91,13 @@ async function postJson(
   return res;
 }
 
-// ------------------------------------------------------------- json parse
+// --------------------------------------------------------- phân tích JSON
 
-/** Parse an LLM JSON response, tolerating markdown fences, the common
- *  invalid escape sequences models emit, and prose around the object. */
+/** Phân tích cú pháp phản hồi JSON của LLM, chấp nhận hàng rào markdown, các
+ *  chuỗi escape sai thường gặp mà mô hình phát ra, và phần văn xuôi bao quanh
+ *  đối tượng. */
 export function parseLlmJson(text: string | null | undefined): unknown {
-  if (!text) throw new LlmError('The model returned an empty response.');
+  if (!text) throw new LlmError('Mô hình trả về phản hồi rỗng.');
   let clean = text.trim();
   if (clean.startsWith('```')) {
     clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
@@ -105,10 +106,10 @@ export function parseLlmJson(text: string | null | undefined): unknown {
   try {
     return JSON.parse(clean);
   } catch {
-    /* fall through to the brace-scanning attempt */
+    /* chuyển sang lần thử quét theo dấu ngoặc nhọn */
   }
-  // Long HTML inside JSON is a common truncation point; try the outermost
-  // object before giving up.
+  // HTML dài nằm trong JSON là chỗ hay bị cắt cụt; hãy thử đối tượng ngoài cùng
+  // trước khi bỏ cuộc.
   const start = clean.indexOf('{');
   const end = clean.lastIndexOf('}');
   if (start >= 0 && end > start) {
@@ -117,21 +118,21 @@ export function parseLlmJson(text: string | null | undefined): unknown {
       return JSON.parse(slice);
     } catch (e) {
       throw new LlmError(
-        `The model's response was not valid JSON (${e instanceof Error ? e.message : e}). ` +
-          'If it keeps happening the output is probably being cut off — raise max tokens in Settings.',
+        `Phản hồi của mô hình không phải JSON hợp lệ (${e instanceof Error ? e.message : e}). ` +
+          'Nếu việc này lặp lại thì nhiều khả năng kết quả đang bị cắt cụt — hãy tăng số token tối đa trong phần Cài đặt.',
       );
     }
   }
-  throw new LlmError('The model returned data in an unexpected shape.');
+  throw new LlmError('Mô hình trả về dữ liệu với cấu trúc không mong đợi.');
 }
 
-// ------------------------------------------------------------- completion
+// --------------------------------------------------------------- hoàn tất
 
 /**
- * One completion event. Every call is a single POST, so there is exactly one
- * `output` and at most one `thinking` — the shape is kept because the refine
- * pipeline (marker scanner + reducers) consumes these and is unchanged from
- * the ai4edu reference.
+ * Một sự kiện hoàn tất (completion event). Mỗi lời gọi là một POST duy nhất,
+ * nên có đúng một `output` và nhiều nhất một `thinking` — cấu trúc này được giữ
+ * vì đường ống tinh chỉnh (bộ quét dấu mốc + bộ rút gọn) tiêu thụ chúng và vẫn
+ * không đổi so với bản tham chiếu ai4edu.
  */
 export interface CompletionEvent {
   kind: 'thinking' | 'output';
@@ -139,10 +140,11 @@ export interface CompletionEvent {
 }
 
 /**
- * Reasoning text in a NON-streaming response message. OpenRouter normalizes
- * provider shapes onto `reasoning` / `reasoning_content` (strings) or
- * `reasoning_details[]` ({text|summary}). Prefer the flat fields so a provider
- * that sets both does not have every token reported twice.
+ * Văn bản suy luận trong một thông điệp phản hồi KHÔNG truyền dần (non-stream).
+ * OpenRouter chuẩn hóa hình dạng của các nhà cung cấp về `reasoning` /
+ * `reasoning_content` (chuỗi) hoặc `reasoning_details[]` ({text|summary}). Ưu
+ * tiên các trường phẳng để nhà cung cấp đặt cả hai không khiến mọi token bị báo
+ * hai lần.
  */
 function reasoningText(message: Record<string, unknown>): string {
   for (const key of ['reasoning', 'reasoning_content']) {
@@ -163,8 +165,8 @@ function reasoningText(message: Record<string, unknown>): string {
   return '';
 }
 
-/** Content from a non-streaming choice. Some gateways hand back an array of
- *  parts instead of a plain string. */
+/** Nội dung từ một lựa chọn (choice) không truyền dần. Một số cổng vào
+ *  (gateway) trả về một mảng các phần thay vì một chuỗi thuần. */
 function contentText(message: Record<string, unknown>): string {
   const content = message.content;
   if (typeof content === 'string') return content;
@@ -183,10 +185,11 @@ function contentText(message: Record<string, unknown>): string {
   return '';
 }
 
-/** Build the request payload for one chat call. Generation knobs are only
- *  sent when configured — unknown fields are ignored by most endpoints.
+/** Dựng payload yêu cầu cho một lời gọi chat. Các núm điều chỉnh sinh nội dung
+ *  chỉ được gửi khi đã cấu hình — hầu hết điểm cuối (endpoint) bỏ qua các trường
+ *  lạ.
  *
- *  `stream` is always false: these are plain request/response POSTs. */
+ *  `stream` luôn là false: đây là các POST yêu cầu/phản hồi thuần. */
 export function buildPayload(
   cfg: LLMConfig,
   systemPrompt: string,
@@ -206,9 +209,9 @@ export function buildPayload(
   if (maxTokens != null) payload.max_tokens = maxTokens;
   if (cfg.top_p != null) payload.top_p = cfg.top_p;
   if (cfg.reasoning_max_tokens != null) {
-    // Explicit budget beats the effort shorthand (OpenRouter treats them as
-    // mutually exclusive). The extra fields are llama.cpp per-request
-    // overrides and are harmless elsewhere.
+    // Ngân sách tường minh thắng cách viết tắt theo mức nỗ lực (OpenRouter coi
+    // chúng là loại trừ nhau). Các trường thêm là ghi đè theo từng yêu cầu của
+    // llama.cpp và vô hại ở nơi khác.
     payload.reasoning = { max_tokens: cfg.reasoning_max_tokens };
     payload.thinking_budget_tokens = cfg.reasoning_max_tokens;
     payload.reasoning_budget_tokens = cfg.reasoning_max_tokens;
@@ -225,39 +228,40 @@ export function buildPayload(
 }
 
 export interface ChatResult {
-  /** The model's output text. */
+  /** Văn bản kết quả của mô hình. */
   text: string;
-  /** Reasoning/thinking, when the endpoint returns it. */
+  /** Phần suy luận/suy nghĩ, khi điểm cuối (endpoint) trả về nó. */
   thinking: string;
 }
 
 /**
- * Pull `{ text, thinking }` out of a non-streaming chat-completions body.
+ * Lấy `{ text, thinking }` ra khỏi phần thân (body) chat-completions không
+ * truyền dần.
  *
- * Pure and exported so the wire contract can be tested without a browser.
- * Handles the three shapes that show up in practice: a plain string content, an
- * array of content parts, and a `finish_reason` of `length` (the tell-tale of
- * a budget that was too small).
+ * Hàm thuần và được export để có thể kiểm thử giao kèo truyền tải mà không cần
+ * trình duyệt. Xử lý ba hình dạng thường gặp trong thực tế: nội dung là chuỗi
+ * thuần, mảng các phần nội dung, và `finish_reason` bằng `length` (dấu hiệu của
+ * một ngân sách token quá nhỏ).
  */
 export function parseChatResponse(body: unknown): ChatResult {
   if (!body || typeof body !== 'object') {
-    throw new LlmError('The endpoint returned an unexpected body.');
+    throw new LlmError('Điểm cuối (endpoint) trả về phần thân không mong đợi.');
   }
   const b = body as Record<string, unknown>;
 
-  // Endpoints report failures in the body even with a 200 status.
+  // Điểm cuối (endpoint) báo lỗi trong phần thân ngay cả khi trạng thái là 200.
   if (b.error) {
     const raw = b.error;
     const msg =
       raw && typeof raw === 'object'
         ? ((raw as Record<string, unknown>).message ?? JSON.stringify(raw))
         : String(raw);
-    throw new LlmError(`The endpoint returned an error: ${msg}`);
+    throw new LlmError(`Điểm cuối (endpoint) trả về lỗi: ${msg}`);
   }
 
   const choices = b.choices;
   if (!Array.isArray(choices) || !choices.length) {
-    throw new LlmError('The endpoint returned no choices.');
+    throw new LlmError('Điểm cuối (endpoint) không trả về lựa chọn (choice) nào.');
   }
   const choice = choices[0] as Record<string, unknown>;
   const message = (choice.message ?? {}) as Record<string, unknown>;
@@ -266,27 +270,29 @@ export function parseChatResponse(body: unknown): ChatResult {
   const thinking = reasoningText(message);
 
   if (!text.trim()) {
-    // A truncated response is the common cause: the model spent the whole
-    // budget thinking, or the document did not fit.
+    // Nguyên nhân phổ biến là phản hồi bị cắt cụt: mô hình đã tiêu hết ngân
+    // sách vào việc suy nghĩ, hoặc tài liệu không vừa.
     if (finish === 'length') {
       throw new LlmError(
-        'The response was cut off before any output — raise max tokens in Settings.',
+        'Phản hồi bị cắt cụt trước khi có bất kỳ kết quả nào — hãy tăng số token tối đa trong phần Cài đặt.',
       );
     }
     throw new LlmError(
-      'The model returned nothing. A reasoning model can burn its whole ' +
-        'token budget thinking — raise max tokens in Settings and try again.',
+      'Mô hình không trả về gì cả. Mô hình suy luận có thể đốt hết ngân sách ' +
+        'token vào việc suy nghĩ — hãy tăng số token tối đa trong phần Cài đặt rồi thử lại.',
     );
   }
   return { text, thinking };
 }
 
 /**
- * One plain POST to the chat endpoint and the whole answer back.
+ * Một POST đơn giản tới điểm cuối (endpoint) chat và nhận về toàn bộ câu trả
+ * lời.
  *
- * No SSE, no incremental framing: the response arrives as a single JSON body
- * (`choices[0].message`). Reasoning, when the endpoint reports it, is returned
- * alongside rather than discarded so the refine UI can still show it.
+ * Không SSE, không đóng gói tăng dần: phản hồi đến dưới dạng một phần thân JSON
+ * duy nhất (`choices[0].message`). Phần suy luận, khi điểm cuối (endpoint) báo
+ * cáo, được trả về kèm chứ không bị bỏ đi, để giao diện tinh chỉnh vẫn hiển thị
+ * được.
  */
 export async function chat(
   cfg: LLMConfig,
@@ -303,17 +309,17 @@ export async function chat(
     body = await res.json();
   } catch (e) {
     throw new LlmError(
-      `The endpoint returned a non-JSON body (${e instanceof Error ? e.message : e}).`,
+      `Điểm cuối (endpoint) trả về phần thân không phải JSON (${e instanceof Error ? e.message : e}).`,
     );
   }
   return parseChatResponse(body);
 }
 
 /**
- * Adapter that presents the single POST response as the event sequence the
- * refine pipeline consumes. The pipeline itself (marker scanner, edit
- * validation, element ops) stays exactly what it was — only the transport
- * changed from SSE to one plain request/response.
+ * Bộ thích ứng trình bày phản hồi của một POST duy nhất dưới dạng chuỗi sự kiện
+ * mà đường ống tinh chỉnh tiêu thụ. Bản thân đường ống (bộ quét dấu mốc, kiểm
+ * tra hợp lệ chỉnh sửa, thao tác trên phần tử) vẫn y nguyên — chỉ phần truyền
+ * tải đổi từ SSE sang một yêu cầu/phản hồi thuần.
  */
 export async function* completeChatEvents(
   cfg: LLMConfig,
@@ -327,7 +333,8 @@ export async function* completeChatEvents(
   yield { kind: 'output', delta: result.text };
 }
 
-/** Buffered call for callers that don't need reasoning (analyze). */
+/** Lời gọi có gom đệm (buffered) cho những nơi không cần phần suy luận
+ *  (phân tích). */
 export async function completeChat(
   cfg: LLMConfig,
   systemPrompt: string,
@@ -345,10 +352,10 @@ export async function completeChat(
   return result.text;
 }
 
-// ---------------------------------------------------------------- analyze
+// -------------------------------------------------------------- phân tích
 
 export interface AnalyzeRequest {
-  /** PNG of the sketch, base64 without the data-URL prefix. */
+  /** Ảnh PNG của bản phác thảo, dạng base64 không kèm tiền tố data-URL. */
   imageBase64: string;
   mimeType?: string;
   sourceElementIds: string[];
@@ -366,12 +373,13 @@ function isValidSkeletonElement(el: unknown): el is SkeletonElement {
 }
 
 /**
- * One analyze pass: sketch image in, artifact out. Plain POST, one response.
+ * Một lượt phân tích: ảnh bản phác thảo vào, kết quả ra. POST thuần, một phản
+ * hồi.
  *
- * The prompt and the pipeline are unchanged from the ai4edu reference; only the
- * transport differs. `maxTokens` lets callers hold the response to a small
- * budget — the analyze document is short, so a tight cap is what makes it feel
- * instant.
+ * Prompt và đường ống giữ nguyên như bản tham chiếu ai4edu; chỉ phần truyền tải
+ * là khác. `maxTokens` cho phép bên gọi giữ phản hồi trong một ngân sách nhỏ —
+ * tài liệu phân tích ngắn, nên một giới hạn chặt là thứ khiến nó có cảm giác
+ * tức thời.
  */
 export async function analyzeSketch(
   cfg: LLMConfig,
@@ -398,14 +406,14 @@ export async function analyzeSketch(
   );
   const gen = parseLlmJson(raw);
   if (!gen || typeof gen !== 'object') {
-    throw new LlmError('The model returned data in an unexpected shape.');
+    throw new LlmError('Mô hình trả về dữ liệu với cấu trúc không mong đợi.');
   }
   const g = gen as Record<string, unknown>;
 
   let kind: Artifact['kind'] = g.kind as Artifact['kind'];
   if (kind !== 'html_sim' && kind !== 'elements') {
-    // Backwards-tolerant fallback: a model that ignored the schema but
-    // produced an HTML doc is still an html_sim.
+    // Phương án dự phòng tương thích ngược: một mô hình bỏ qua schema nhưng
+    // vẫn tạo ra tài liệu HTML thì vẫn được coi là html_sim.
     if (typeof g.simulation_code === 'string' && g.simulation_code) {
       kind = 'html_sim';
       g.html = g.simulation_code;
@@ -413,7 +421,7 @@ export async function analyzeSketch(
       kind = 'html_sim';
     } else {
       throw new LlmError(
-        'The model did not return a simulation or a diagram. Try analyzing again.',
+        'Mô hình không trả về mô phỏng hay sơ đồ nào. Hãy thử phân tích lại.',
       );
     }
   }
@@ -437,7 +445,7 @@ export async function analyzeSketch(
     const elements = rawElements.filter(isValidSkeletonElement);
     if (!elements.length) {
       throw new LlmError(
-        'The model chose diagram output but returned no usable elements. Try analyzing again.',
+        'Mô hình chọn đầu ra là sơ đồ nhưng không trả về phần tử nào dùng được. Hãy thử phân tích lại.',
       );
     }
     payload = { elements };
@@ -445,14 +453,14 @@ export async function analyzeSketch(
     const html = g.html;
     if (typeof html !== 'string' || !html.trim()) {
       throw new LlmError(
-        'The model returned an empty simulation document. Try analyzing again.',
+        'Mô hình trả về tài liệu mô phỏng rỗng. Hãy thử phân tích lại.',
       );
     }
     payload = { html };
   }
 
   const title =
-    String(g.title ?? '').trim() || (kind === 'elements' ? 'Diagram' : 'Simulation');
+    String(g.title ?? '').trim() || (kind === 'elements' ? 'Sơ đồ' : 'Mô phỏng');
 
   return {
     id: newId(),

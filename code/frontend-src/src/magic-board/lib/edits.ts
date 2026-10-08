@@ -1,16 +1,16 @@
 /**
- * Search/replace edit application for model refine output.
+ * Áp dụng chỉnh sửa tìm/thay cho kết quả tinh chỉnh của mô hình.
  *
- * Direct port of the ai4edu backend's `app/edits.py` (aider `diff` /
- * Claude Code FileEdit semantics) so the refine contract behaves exactly as
- * it did server-side:
- *  - exact string match first; each search must occur exactly once
- *  - fallback: match a line-subsequence ignoring trailing whitespace
- *  - atomic: every edit applies to an in-memory copy, and any failure raises
- *    naming the offending edit — nothing is returned half-applied
+ * Bản chuyển trực tiếp từ `app/edits.py` của backend ai4edu (ngữ nghĩa `diff` của
+ * aider / FileEdit của Claude Code) để giao kèo tinh chỉnh hành xử đúng như khi
+ * còn ở phía máy chủ:
+ *  - khớp chuỗi chính xác trước; mỗi đoạn cần tìm phải xuất hiện đúng một lần
+ *  - dự phòng: khớp một dãy dòng con, bỏ qua khoảng trắng cuối dòng
+ *  - nguyên tử: mọi chỉnh sửa áp dụng lên một bản sao trong bộ nhớ, và mọi lỗi
+ *    đều ném ra kèm tên chỉnh sửa vi phạm — không bao giờ trả về kết quả nửa vời
  *
- * Plus id-based ops for `elements` artifacts: models are far more reliable
- * emitting {op,id,patch} than diffs over a JSON array.
+ * Cộng thêm các op theo id cho kết quả `elements`: mô hình phát ra
+ * {op,id,patch} đáng tin cậy hơn nhiều so với diff trên một mảng JSON.
  */
 import type { SkeletonElement } from './types';
 
@@ -21,14 +21,14 @@ export class EditError extends Error {
   }
 }
 
-/** Start indices of `needle` in `doc` matched line-wise, ignoring trailing
- *  whitespace on every line. */
+/** Vị trí bắt đầu của `needle` trong `doc` khi khớp theo từng dòng, bỏ qua
+ *  khoảng trắng cuối mỗi dòng. */
 function lineMatches(doc: string, needle: string): number[] {
   const needleLines = needle.split('\n').map((ln) => ln.replace(/\s+$/, ''));
   if (!needleLines.length || (needleLines.length === 1 && needleLines[0] === '')) {
     return [];
   }
-  // Keep the newlines so offsets line up with the original string.
+  // Giữ lại các ký tự xuống dòng để độ lệch khớp với chuỗi gốc.
   const docLines = doc.split('\n');
   const stripped = docLines.map((ln) => ln.replace(/\s+$/, ''));
   const offsets: number[] = [0];
@@ -62,10 +62,10 @@ function occurrences(haystack: string, needle: string): number {
   }
 }
 
-/** 1-based line where `needle` would apply in `doc`, or null when it doesn't
- *  match (exactly-once — exact match first, then the line-normalized
- *  fallback). Used to report "located at line N" while the replacement is
- *  still streaming in. */
+/** Dòng (tính từ 1) nơi `needle` sẽ áp dụng trong `doc`, hoặc null khi nó không
+ *  khớp (đúng một lần — khớp chính xác trước, rồi tới bản dự phòng đã chuẩn hóa
+ *  theo dòng). Dùng để báo "nằm ở dòng N" trong khi phần thay thế vẫn đang được
+ *  truyền tới. */
 export function findMatchLine(doc: string, needle: string): number | null {
   if (!needle) return null;
   if (occurrences(doc, needle) === 1) {
@@ -83,15 +83,15 @@ export interface Edit {
   replace: string;
 }
 
-/** Apply [{search, replace}] blocks to `doc`. Atomic — throws EditError
- *  (naming the failing search excerpt) if any edit matches 0 or >1 times. */
+/** Áp dụng các khối [{search, replace}] lên `doc`. Nguyên tử — ném EditError
+ *  (kèm đoạn văn bản cần tìm bị lỗi) nếu chỉnh sửa nào khớp 0 hoặc >1 lần. */
 export function applyEdits(doc: string, edits: Edit[]): string {
   let result = doc;
   edits.forEach((edit, i) => {
     const search = edit.search;
     const replace = edit.replace ?? '';
     if (typeof search !== 'string' || !search) {
-      throw new EditError(`edit ${i}: missing/empty 'search' text`);
+      throw new EditError(`chỉnh sửa ${i}: thiếu/rỗng văn bản 'search'`);
     }
     const firstLine = search.split('\n')[0] ?? '';
     const excerpt = firstLine.slice(0, 80) + (search.includes('\n') ? '…' : '');
@@ -104,9 +104,9 @@ export function applyEdits(doc: string, edits: Edit[]): string {
 
     const hits = count === 0 ? lineMatches(result, search) : [];
     if (hits.length === 1) {
-      // Line-normalized match: splice by line boundaries — the matched span
-      // is the n doc lines starting at the hit offset, which absorbs
-      // trailing-whitespace differences between search and doc.
+      // Khớp đã chuẩn hóa theo dòng: cắt theo ranh giới dòng — đoạn khớp là n
+      // dòng của doc bắt đầu tại vị trí tìm thấy, nhờ đó hấp thụ khác biệt về
+      // khoảng trắng cuối dòng giữa đoạn cần tìm và doc.
       const start = hits[0]!;
       const n = search.split('\n').length;
       const before = result.slice(0, start);
@@ -116,7 +116,7 @@ export function applyEdits(doc: string, edits: Edit[]): string {
       for (let k = 0; k < n; k++) {
         const ln = docLines[lineIdx + k] ?? '';
         end += ln.length;
-        if (k < n - 1) end += 1; // the newline that was split away
+        if (k < n - 1) end += 1; // ký tự xuống dòng đã bị tách ra
       }
       result = before + replace + result.slice(end);
       return;
@@ -124,22 +124,22 @@ export function applyEdits(doc: string, edits: Edit[]): string {
 
     const why =
       count === 0 && !hits.length
-        ? 'not found'
-        : `ambiguous (matched ${Math.max(count, hits.length)} times)`;
-    throw new EditError(`edit ${i} ${why}: search text starting '${excerpt}'`);
+        ? 'không tìm thấy'
+        : `không rõ ràng (khớp ${Math.max(count, hits.length)} lần)`;
+    throw new EditError(`chỉnh sửa ${i} ${why}: văn bản cần tìm bắt đầu bằng '${excerpt}'`);
   });
   return result;
 }
 
-// ---------- Skeleton-element ops (`elements` artifact kind) ----------
+// ---------- Các op trên phần tử khung (loại kết quả `elements`) ----------
 
 export type ElementOp =
   | { op: 'update'; id: string; patch: Record<string, unknown> }
   | { op: 'add'; elements: SkeletonElement[] }
   | { op: 'remove'; ids: string[] };
 
-/** Apply [{op: update|add|remove}] to a skeleton element list. Atomic —
- *  throws EditError naming the failing op; the input list is never mutated. */
+/** Áp dụng [{op: update|add|remove}] lên danh sách phần tử khung. Nguyên tử —
+ *  ném EditError kèm op bị lỗi; danh sách đầu vào không bao giờ bị biến đổi. */
 export function applyElementOps(
   elements: SkeletonElement[],
   ops: unknown[],
@@ -151,7 +151,7 @@ export function applyElementOps(
 
   ops.forEach((raw, i) => {
     if (!raw || typeof raw !== 'object') {
-      throw new EditError(`op ${i}: not an object`);
+      throw new EditError(`op ${i}: không phải một đối tượng`);
     }
     const op = raw as Record<string, unknown>;
     const kind = op.op;
@@ -159,11 +159,11 @@ export function applyElementOps(
     if (kind === 'update') {
       const patch = op.patch;
       if (!patch || typeof patch !== 'object' || !Object.keys(patch).length) {
-        throw new EditError(`op ${i}: update requires a non-empty 'patch'`);
+        throw new EditError(`op ${i}: update cần một 'patch' không rỗng`);
       }
       const idx = indexOf(op.id);
-      if (idx < 0) throw new EditError(`op ${i}: no element with id ${String(op.id)}`);
-      // ids are identity — never rewritable.
+      if (idx < 0) throw new EditError(`op ${i}: không có phần tử nào với id ${String(op.id)}`);
+      // id là danh tính — không bao giờ được ghi đè.
       const { id: _drop, ...fields } = patch as Record<string, unknown>;
       result[idx] = { ...result[idx]!, ...fields };
       return;
@@ -172,16 +172,16 @@ export function applyElementOps(
     if (kind === 'add') {
       const newEls = op.elements;
       if (!Array.isArray(newEls) || !newEls.length) {
-        throw new EditError(`op ${i}: add requires a non-empty 'elements'`);
+        throw new EditError(`op ${i}: add cần một 'elements' không rỗng`);
       }
       const existing = new Set(result.map((el) => el.id));
       for (const el of newEls) {
         if (!el || typeof el !== 'object' || !(el as SkeletonElement).id) {
-          throw new EditError(`op ${i}: added element missing required 'id'`);
+          throw new EditError(`op ${i}: phần tử được thêm thiếu 'id' bắt buộc`);
         }
         const id = (el as SkeletonElement).id!;
         if (existing.has(id)) {
-          throw new EditError(`op ${i}: added element id '${id}' already exists`);
+          throw new EditError(`op ${i}: id phần tử được thêm '${id}' đã tồn tại`);
         }
         existing.add(id);
       }
@@ -192,11 +192,11 @@ export function applyElementOps(
     if (kind === 'remove') {
       const ids = op.ids;
       if (!Array.isArray(ids) || !ids.length) {
-        throw new EditError(`op ${i}: remove requires a non-empty 'ids'`);
+        throw new EditError(`op ${i}: remove cần một 'ids' không rỗng`);
       }
       for (const elId of ids) {
         if (indexOf(elId) < 0) {
-          throw new EditError(`op ${i}: no element with id ${String(elId)}`);
+          throw new EditError(`op ${i}: không có phần tử nào với id ${String(elId)}`);
         }
       }
       const drop = new Set(ids);
@@ -204,7 +204,7 @@ export function applyElementOps(
       return;
     }
 
-    throw new EditError(`op ${i}: unknown op ${JSON.stringify(kind)}`);
+    throw new EditError(`op ${i}: op không xác định ${JSON.stringify(kind)}`);
   });
 
   return result;

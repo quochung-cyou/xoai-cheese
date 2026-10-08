@@ -1,30 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head><script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Yêu cầu thất bại';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>
 <meta charset="utf-8">
 <style>
@@ -47,11 +48,11 @@ addEventListener('unhandledrejection', function(e){
 </style>
 </head>
 <body>
-<header>Projectile Motion<span id="status">ready</span></header>
+<header>Chuyển động ném xiên<span id="status">sẵn sàng</span></header>
 <div id="stage"><canvas id="cv"></canvas></div>
 <div id="controls">
-  <button id="play">Launch</button>
-  <button id="reset" class="ghost">Reset</button>
+  <button id="play">Phóng</button>
+  <button id="reset" class="ghost">Đặt lại</button>
   <label>v₀ <input id="v0" type="range" min="5" max="60" value="20"><span class="val" id="v0V"></span></label>
   <label>θ <input id="ang" type="range" min="5" max="85" value="45"><span class="val" id="angV"></span></label>
   <label>g <input id="g" type="range" min="16" max="250" value="98"><span class="val" id="gV"></span></label>
@@ -68,7 +69,7 @@ const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const status = document.getElementById('status');
 let t = 0, playing = false, raf = null, last = 0;
 
-// Analytic solution — no integrator needed.
+// Nghiệm giải tích — không cần bộ tích phân.
 const x = (t) => P.v0 * Math.cos(P.ang) * t;
 const y = (t) => P.v0 * Math.sin(P.ang) * t - 0.5 * P.g * t * t;
 const tLand = () => 2 * P.v0 * Math.sin(P.ang) / P.g;
@@ -78,38 +79,38 @@ const apex = () => (P.v0 * Math.sin(P.ang)) ** 2 / (2 * P.g);
 function draw() {
   const w = cv.width, h = cv.height;
   ctx.clearRect(0, 0, w, h);
-  // fit range+apex into viewport with padding
+  // căn tầm xa + độ cao đỉnh vào khung nhìn kèm lề
   const sx = (w - 80) / Math.max(range(), 1);
   const sy = (h - 80) / Math.max(apex(), 1);
   const s = Math.min(sx, sy);
   const ox = 50, oy = h - 40;
-  // ground + grid
+  // mặt đất + lưới
   ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1;
   ctx.strokeRect(0, 0, 0, 0);
   ctx.fillStyle = '#e2e8f0';
   for (let gx = 20; gx < w; gx += 40) for (let gy = 20; gy < h - 40; gy += 40) ctx.fillRect(gx, gy, 1.5, 1.5);
   ctx.strokeStyle = '#94a3b8'; ctx.beginPath();
   ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.stroke();
-  // dashed full trajectory
+  // quỹ đạo đầy đủ (nét đứt)
   ctx.strokeStyle = '#c7d2fe'; ctx.setLineDash([4, 4]); ctx.beginPath();
   for (let tt = 0; tt <= tLand(); tt += tLand() / 100) {
     const px = ox + x(tt) * s, py = oy - y(tt) * s;
     tt === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
   }
   ctx.stroke(); ctx.setLineDash([]);
-  // flown path
+  // đường đã bay
   ctx.strokeStyle = '#4f46e5'; ctx.lineWidth = 2; ctx.beginPath();
   for (let tt = 0; tt <= t; tt += tLand() / 200) {
     const px = ox + x(tt) * s, py = oy - y(tt) * s;
     tt === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
   }
   ctx.stroke();
-  // ball
+  // quả bóng
   const bx = ox + x(t) * s, by = oy - Math.max(y(t), 0) * s;
   ctx.fillStyle = t >= tLand() ? '#10b981' : '#4f46e5';
   ctx.beginPath(); ctx.arc(bx, by, 8, 0, 7); ctx.fill();
   status.textContent = t >= tLand()
-    ? `landed — range ${range().toFixed(1)}m, apex ${apex().toFixed(1)}m`
+    ? `đã chạm đất — tầm xa ${range().toFixed(1)}m, đỉnh cao ${apex().toFixed(1)}m`
     : `t=${t.toFixed(1)}s  x=${x(t).toFixed(1)}m  y=${Math.max(y(t), 0).toFixed(1)}m`;
 }
 
@@ -118,22 +119,22 @@ function frame(ts) {
   const dt = Math.min((ts - last) / 1000, 0.05); last = ts;
   t += dt;
   if (t >= tLand()) { t = tLand(); playing = false;
-    document.getElementById('play').textContent = 'Launch'; }
+    document.getElementById('play').textContent = 'Phóng'; }
   draw();
   if (playing) raf = requestAnimationFrame(frame);
 }
 function reset() { playing = false; cancelAnimationFrame(raf); t = 0;
-  document.getElementById('play').textContent = 'Launch'; draw(); }
+  document.getElementById('play').textContent = 'Phóng'; draw(); }
 function resize() {
   const r = document.getElementById('stage').getBoundingClientRect();
   cv.width = r.width; cv.height = r.height; draw();
 }
 
 document.getElementById('play').onclick = () => {
-  if (playing) { playing = false; document.getElementById('play').textContent = 'Launch'; return; }
+  if (playing) { playing = false; document.getElementById('play').textContent = 'Phóng'; return; }
   if (t >= tLand()) t = 0;
   playing = true; last = performance.now();
-  document.getElementById('play').textContent = 'Pause';
+  document.getElementById('play').textContent = 'Tạm dừng';
   raf = requestAnimationFrame(frame);
 };
 document.getElementById('reset').onclick = reset;

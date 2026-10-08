@@ -1,14 +1,14 @@
 /**
- * Incremental scanner for the refine stream contract — port of the ai4edu
- * backend's `app/edits_stream.py`.
+ * Bộ quét tăng dần cho giao kèo luồng tinh chỉnh — bản chuyển từ
+ * `app/edits_stream.py` của backend ai4edu.
  *
- * The model emits plain text: narration interleaved with marker blocks
- * (<<<<<<< SEARCH / ======= / >>>>>>> REPLACE, or <<<<<<< REWRITE /
- * >>>>>>> END). This scanner turns the token stream into per-block lifecycle
- * events as each marker line arrives.
+ * Mô hình phát ra văn bản thuần: phần kể xen kẽ với các khối dấu mốc
+ * (<<<<<<< SEARCH / ======= / >>>>>>> REPLACE, hoặc <<<<<<< REWRITE /
+ * >>>>>>> END). Bộ quét này biến luồng token thành các sự kiện vòng đời theo
+ * từng khối ngay khi mỗi dòng dấu mốc đến.
  *
- * It is a line-oriented state machine, NOT a brace counter: a search block is
- * known-complete only when its marker line arrives.
+ * Đây là một máy trạng thái theo dòng, KHÔNG phải bộ đếm dấu ngoặc: một khối cần
+ * tìm chỉ được coi là hoàn tất khi dòng dấu mốc của nó đến.
  */
 
 const SEARCH = '<<<<<<< SEARCH';
@@ -44,17 +44,16 @@ export class EditStreamScanner {
   private index = 0;
   private rewriteLines = 0;
 
-  /** Consume an output delta; return scan events completed so far. */
+  /** Tiêu thụ một delta kết quả; trả về các sự kiện quét đã hoàn tất tới giờ. */
   feed(text: string): ScanEvent[] {
     this.buf += text;
     const events: ScanEvent[] = [];
 
-    // Process only lines that are definitely complete. The still-open tail
-    // is held back until its newline arrives: emitting it early would either
-    // leak a marker prefix (`<`, ```) into the narration or, if the finished
-    // line then turned out to be a marker, duplicate prose the caller
-    // already received. Model output is heavily line-broken, so narration
-    // still streams at a natural pace.
+    // Chỉ xử lý những dòng chắc chắn đã hoàn tất. Phần đuôi còn đang mở được giữ
+    // lại cho tới khi ký tự xuống dòng của nó đến: phát nó sớm sẽ hoặc làm rò rỉ
+    // tiền tố dấu mốc (`<`, ```) vào phần kể, hoặc nếu dòng đã xong đó hóa ra là
+    // dấu mốc thì sẽ lặp lại phần văn xuôi mà bên gọi đã nhận được. Kết quả của
+    // mô hình bị ngắt dòng rất nhiều, nên phần kể vẫn chảy với nhịp tự nhiên.
     const parts = this.buf.split('\n');
     const tail = parts.pop() ?? '';
     for (const line of parts) events.push(...this.line(line));
@@ -62,9 +61,9 @@ export class EditStreamScanner {
     return events;
   }
 
-  /** End of stream: emit any leftover text as narration. Incomplete blocks
-   *  are NOT emitted — the caller treats a run with no closed blocks as a
-   *  malformed response. */
+  /** Kết thúc luồng: phát mọi văn bản còn sót lại như phần kể. Các khối chưa
+   *  hoàn tất KHÔNG được phát ra — bên gọi coi một lượt không có khối nào đóng
+   *  là phản hồi sai định dạng. */
   flush(): ScanEvent[] {
     const events: ScanEvent[] = [];
     if (this.state === 'text' && this.buf.trim()) {
@@ -90,7 +89,7 @@ export class EditStreamScanner {
         this.rewriteLines = 0;
         return [{ type: 'rewrite-start' }];
       }
-      if (isMarker(line)) return []; // stray marker / code fence — drop
+      if (isMarker(line)) return []; // dấu mốc lạc / hàng rào mã — bỏ đi
       return [{ type: 'narration', delta: line + '\n' }];
     }
 
@@ -123,7 +122,7 @@ export class EditStreamScanner {
       return [];
     }
 
-    // rewrite
+    // viết lại toàn bộ
     if (s === END) {
       this.state = 'text';
       const code = this.blockLines.join('\n');

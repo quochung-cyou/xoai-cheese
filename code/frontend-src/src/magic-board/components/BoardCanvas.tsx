@@ -24,10 +24,10 @@ interface BoardCanvasProps {
 }
 
 /**
- * The whiteboard itself. `initialData` is only read on mount, so the parent
- * remounts via `key` when a different board is loaded. restore() rehydrates
- * serialized appState internals (collaborators Map, etc.) that a plain JSON
- * blob cannot represent.
+ * Chính chiếc bảng trắng. `initialData` chỉ được đọc khi gắn, nên component
+ * cha gắn lại qua `key` khi nạp một bảng khác. restore() tái tạo các cấu trúc
+ * nội bộ của appState đã được tuần tự hóa (Map collaborators, v.v.) mà một
+ * khối JSON thuần không biểu diễn được.
  */
 export default function BoardCanvas({ scene, onSceneChange, onApi }: BoardCanvasProps) {
   const initialData = useMemo<ExcalidrawInitialDataState>(() => {
@@ -44,12 +44,16 @@ export default function BoardCanvas({ scene, onSceneChange, onApi }: BoardCanvas
       elements: restored.elements,
       appState: {
         ...restored.appState,
-        // Chalkboard look — dark board, white "chalk" strokes, hand font.
-        // Applied post-restore so saved scenes can't resurrect light prefs.
+        // Giao diện Excalidraw bằng tiếng Việt. Locale `vi-VN` nằm sẵn trong
+        // gói @excalidraw/excalidraw và được nạp lazy khi langCode đổi.
+        langCode: 'vi-VN',
+        // Vẻ ngoài bảng phấn — nền tối, nét "phấn" trắng, phông chữ viết tay.
+        // Áp dụng sau khi restore để cảnh đã lưu không thể làm sống lại các
+        // tùy chọn nền sáng.
         viewBackgroundColor: BOARD_BG,
         currentItemStrokeColor: '#f1f3f5',
         currentItemBackgroundColor: 'transparent',
-        currentItemFontFamily: 1, // Virgil — Excalidraw's handwriting font
+        currentItemFontFamily: 1, // Virgil — phông chữ viết tay của Excalidraw
         currentItemRoughness: 1,
       },
       files: restored.files,

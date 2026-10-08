@@ -8,7 +8,7 @@
 export const BOARD_BG = '#1e2420';
 
 /** Branding for the board chrome. */
-export const APP_NAME = 'Magic Board';
+export const APP_NAME = 'Bảng Ma Thuật';
 
 /** Artifact sizing shared by live analyze placement and cache spawning. */
 export const ARTIFACT_FALLBACK_H = 420;

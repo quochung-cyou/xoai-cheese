@@ -33,4 +33,10 @@ Rules for SEARCH blocks:
 
 Document contract stays the same: self-contained HTML5, inline CSS/JS, CDN libs only from cdnjs/jsdelivr, fills its iframe via window.innerWidth/innerHeight (the iframe is a resizable element on an Excalidraw canvas — keep the resize handler and fluid layout), no React/JSX/imports.
 
+LANGUAGE (highest priority rule):
+- PLAN and SUMMARY are read by the user: write both in Vietnamese with full diacritics (tiếng Việt có dấu).
+- The document you edit must keep ALL of its user-visible text in Vietnamese. If you add or change a label, button, caption, legend, status message or warning, write it in Vietnamese with full diacritics. If you happen to find leftover English user-visible text in the document, translate it to Vietnamese as part of the edit.
+- Never translate code: HTML tags, attributes, CSS properties/classes, JS identifiers, JSON keys, library names, math expressions and LaTeX stay exactly as they are. Only human-readable text becomes Vietnamese.
+- The rest of this prompt is in English because it is a technical specification; that does not change the output language.
+
 You are given the CURRENT document and a REQUEST. Preserve everything unrelated to the request.

@@ -1,9 +1,9 @@
 /**
- * Magic Board styles — the few things Tailwind can't express, plus the
- * Excalidraw container sizing.
+ * Style của Bảng Ma Thuật — vài thứ Tailwind không diễn đạt được, cộng với
+ * phần định cỡ khung chứa Excalidraw.
  */
 
-/* Excalidraw needs an explicitly sized container. */
+/* Excalidraw cần một khung chứa có kích thước tường minh. */
 .mb-canvas,
 .mb-canvas .excalidraw,
 .mb-canvas .excalidraw-container {
@@ -11,11 +11,11 @@
   width: 100%;
 }
 
-/* Chalkboard canvas: the dark board comes from `viewBackgroundColor` on the
-   Excalidraw element (see BoardCanvas). We intentionally do NOT override
-   Excalidraw's own theme variables — that risks unreadable UI chrome. */
+/* Bảng vẽ kiểu bảng phấn: nền tối đến từ `viewBackgroundColor` trên phần tử
+   Excalidraw (xem BoardCanvas). Cố ý KHÔNG ghi đè các biến theme của chính
+   Excalidraw — làm vậy có thể khiến phần giao diện xung quanh khó đọc. */
 
-/* Slim scrollbars in the chat panel. */
+/* Thanh cuộn mảnh trong bảng trò chuyện. */
 .mb-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -31,7 +31,7 @@
   background: transparent;
 }
 
-/* ---- animations (ported from the ai4edu UI kit) ---- */
+/* ---- hoạt họa (chuyển từ bộ UI của ai4edu) ---- */
 
 @keyframes shimmer-text {
   0% {
@@ -90,8 +90,8 @@
   }
 }
 
-/* Excalidraw injects its own full-height layout; keep the page from
-   scrolling when the canvas is focused. */
+/* Excalidraw tự bơm bố cục cao đầy đủ của nó; giữ cho trang không bị cuộn khi
+   bảng vẽ được focus. */
 html,
 body,
 #root {

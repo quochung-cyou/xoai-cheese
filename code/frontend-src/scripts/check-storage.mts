@@ -144,11 +144,19 @@ console.log('storage — duplicate / delete');
 
   const copy = duplicateBoard(a.id)!;
   check('copy has a new id', copy.id !== a.id);
-  check('copy is named after the source', copy.name === 'Original copy', copy.name);
+  // The default name is localised, so assert the shape rather than a literal:
+  // it must be derived from the source and differ from it.
+  check(
+    'copy is named after the source',
+    copy.name.includes(a.name) && copy.name !== a.name,
+    copy.name,
+  );
+  const named = duplicateBoard(a.id, 'Explicit name')!;
+  check('an explicit copy name is honoured', named.name === 'Explicit name', named.name);
   check('copy keeps the scene', JSON.stringify(copy.scene) === JSON.stringify(a.scene));
   check('copy keeps cacheKeys', copy.cacheKeys?.[0] === 'k1');
   check('original still exists', readBoard(a.id) !== null);
-  check('three boards now', listBoards().length === 2, String(listBoards().length));
+  check('three boards now', listBoards().length === 3, String(listBoards().length));
 
   // Deep copy: mutating the copy's scene must not touch the original.
   storeMutable(copy);

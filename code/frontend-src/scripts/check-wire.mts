@@ -250,10 +250,19 @@ console.log('wire — refine scenario patches params and re-renders');
   check('scenario path: a model call happened', seen.length >= 1, String(seen.length));
   check('scenario refine does not stream', !('stream' in seen[0]!.body));
   check('scenario params patched', outcome.payload?.params?.focus === 'brain', JSON.stringify(outcome.payload?.params));
-  check('scenario retitled', outcome.payload?.title === 'Anatomy: brain', String(outcome.payload?.title));
+  // Titles are localised, so assert the behaviour: the title must change with
+  // the focus and must echo the new one.
+  const newTitle = String(outcome.payload?.title ?? '');
+  check(
+    'scenario retitled for the new focus',
+    newTitle !== '' && newTitle !== 'Anatomy: heart' && newTitle.includes('brain'),
+    newTitle,
+  );
   check(
     'scenario re-rendered from the template',
-    (outcome.payload?.html ?? '').includes('Anatomy 3D'),
+    // Assert on the template's stable machinery, not its localised copy.
+    (outcome.payload?.html ?? '').includes('/mb-assets/atlas/structures.json') &&
+      (outcome.payload?.html ?? '').includes('type="importmap"'),
     (outcome.payload?.html ?? '').slice(0, 60),
   );
   check('message surfaced', outcome.message === 'Focusing on the brain.', String(outcome.message));
@@ -377,7 +386,8 @@ console.log('classify — "3d heart" style sketch resolves to the anatomy templa
   const artifact = await tryScenarioFastPath(CFG, 'AAAA');
   check('heart matched the 3D anatomy template', artifact?.payload.scenario === 'anatomy_3d');
   check('focus param carried through', artifact?.payload.params?.focus === 'heart');
-  check('title reads as anatomy', artifact?.title === 'Anatomy: heart', artifact?.title);
+  // Title templates are localised; assert it names the focus we asked for.
+  check('title names the focus', String(artifact?.title ?? '').includes('heart'), artifact?.title);
   check(
     'the real anatomy viewer was rendered',
     (artifact?.payload.html ?? '').includes('structures.json'),
@@ -409,6 +419,28 @@ console.log('classify — narration instead of JSON is tolerated by the caller')
   check('prose-wrapped JSON still matches', artifact?.payload.scenario === 'torus', artifact?.payload.scenario);
 }
 
+console.log('classify — a textbook sketch resolves to the book viewer');
+{
+  replyWith(
+    JSON.stringify({
+      scenario: 'book',
+      params: { book: 'sgk', page: 1 },
+      observation: 'A drawn textbook labelled “SGK Toán 10”.',
+    }),
+  );
+  const artifact = await tryScenarioFastPath(CFG, 'AAAA');
+  check('textbook matched the book template', artifact?.payload.scenario === 'book', artifact?.payload.scenario);
+  check('book param carried through', artifact?.payload.params?.book === 'sgk');
+  const html = artifact?.payload.html ?? '';
+  // The viewer must be wired to this app's asset tree and bridge, not ai4edu's.
+  check('book viewer imports PageFlip locally', html.includes('/mb-assets/vendor/page-flip/page-flip.module.js'));
+  check('book viewer imports PDF.js locally', html.includes('/mb-assets/vendor/pdfjs/pdf.min.mjs'));
+  check('book viewer reads the local catalog', html.includes('/mb-assets/books/catalog.json'));
+  check('book viewer uses this app’s bridge id', html.includes('__MAGIC_BOARD_ARTIFACT_ID__'));
+  check('book viewer does not use ai4edu globals', !html.includes('__AI4EDU_'));
+  check('only one request (no generation)', seen.length === 1, String(seen.length));
+}
+
 console.log('classify — a starved reasoning model is reported clearly');
 {
   // Exactly the observed failure: reasoning ate the whole budget.
@@ -434,8 +466,10 @@ console.log('classify — a starved reasoning model is reported clearly');
     msg = e instanceof Error ? e.message : String(e);
   }
   check(
-    'the empty-content/length case explains itself',
-    msg.includes('cut off') && msg.includes('max tokens'),
+    'the empty-content/length case reports a real message',
+    // Copy is localised, so require an explanation rather than exact English —
+    // it must say something beyond the generic fallback.
+    msg.length > 20 && !msg.includes('returned nothing'),
     msg,
   );
   nextForced = null;

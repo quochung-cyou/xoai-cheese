@@ -11,7 +11,7 @@ export function newRun(): RefineRun {
 }
 
 export function applyEvent(run: RefineRun, ev: RefineEvent): void {
-  // Close the thinking window on the first non-thinking event.
+  // Đóng cửa sổ suy nghĩ ngay khi gặp sự kiện đầu tiên không phải 'thinking'.
   if (run.thinkingStarted != null && run.thinkingMs == null && ev.type !== 'thinking') {
     run.thinkingMs = performance.now() - run.thinkingStarted;
   }
@@ -78,12 +78,12 @@ export function stageLabel(run: RefineRun): string {
   const applied = run.edits.filter((e) => e.status === 'applied').length;
   if (run.stage === 'loading') {
     return run.docLines
-      ? `Loaded document (${run.docLines} lines)`
-      : 'Loading document…';
+      ? `Đã nạp tài liệu (${run.docLines} dòng)`
+      : 'Đang nạp tài liệu…';
   }
-  if (run.stage === 'calling-model') return 'Calling the model…';
-  if (run.rewriteLines != null) return `Rewriting document… ${run.rewriteLines} lines`;
-  if (applied > 0) return `Editing… ${applied} applied`;
-  if (run.edits.length > 0) return 'Editing…';
-  return 'Working…';
+  if (run.stage === 'calling-model') return 'Đang gọi mô hình (model)…';
+  if (run.rewriteLines != null) return `Đang viết lại tài liệu… ${run.rewriteLines} dòng`;
+  if (applied > 0) return `Đang chỉnh sửa… đã áp dụng ${applied}`;
+  if (run.edits.length > 0) return 'Đang chỉnh sửa…';
+  return 'Đang xử lý…';
 }

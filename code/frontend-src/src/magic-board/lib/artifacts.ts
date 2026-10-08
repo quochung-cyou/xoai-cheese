@@ -1,14 +1,14 @@
 /**
- * artifacts — everything the model's output becomes on the canvas.
+ * artifacts — mọi thứ mà kết quả của mô hình trở thành trên bảng vẽ.
  *
- * Ported from ai4edu's `lib/artifacts.ts`. The canvas-element plumbing is
- * unchanged (that is the actual magic): a generated HTML doc becomes an
- * Excalidraw `iframe` element, a generated skeleton list becomes native
- * editable elements, and a curved connector arrow ties each back to the
- * sketch it came from.
+ * Bản chuyển từ `lib/artifacts.ts` của ai4edu. Phần kết nối các phần tử trên
+ * bảng vẽ không đổi (đó mới là phép thuật thật sự): một tài liệu HTML được sinh
+ * ra trở thành một phần tử `iframe` của Excalidraw, một danh sách phần tử khung
+ * được sinh ra trở thành các phần tử gốc có thể chỉnh sửa, và một mũi tên nối
+ * cong buộc mỗi thứ trở về bản phác thảo đã sinh ra nó.
  *
- * Dropped in the port: scenario-check grid helpers and the legacy-scaffold
- * html migration.
+ * Bị bỏ khi chuyển sang: các hàm trợ giúp kiểm tra kịch bản theo lưới và bước
+ * di trú HTML theo khung cũ.
  */
 import { convertToExcalidrawElements, getCommonBounds } from '@excalidraw/excalidraw';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
@@ -22,11 +22,11 @@ import {
 } from './artifactDoc';
 import type { Artifact, SkeletonElement } from './types';
 
-/** postMessage namespace shared with the injected board-blend shim. */
+/** Không gian tên postMessage dùng chung với shim trộn nền bảng được chèn vào. */
 const MSG_SOURCE = 'magic-board';
 
-/** Elements the model owns — excluded from analyze snapshots so generated
- *  output never feeds back into the next analysis. */
+/** Các phần tử do mô hình sở hữu — bị loại khỏi ảnh chụp phân tích để kết quả
+ *  sinh ra không bao giờ quay lại nuôi lần phân tích kế tiếp. */
 export function isGeneratedElement(el: ExcalidrawElement): boolean {
   return (
     el.type === 'iframe' ||
@@ -59,15 +59,15 @@ export interface Rect {
   h: number;
 }
 
-/** Common bounds of a non-empty element subset, {x, y, w, h}. */
+/** Khoảng bao chung của một tập phần tử không rỗng, {x, y, w, h}. */
 export function boundsOf(elements: readonly ExcalidrawElement[]): Rect | null {
   if (!elements.length) return null;
   const [minX, minY, maxX, maxY] = getCommonBounds(elements);
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
-/** Where a new artifact goes: to the right of its source sketch,
- *  top-aligned. */
+/** Nơi một kết quả mới đi tới: bên phải bản phác thảo nguồn, căn thẳng hàng
+ *  phía trên. */
 export function placementRect(source: Rect | null, aspect: number): Rect {
   const h = Math.min(
     Math.max(source?.h ?? ARTIFACT_FALLBACK_H, ARTIFACT_MIN_H),
@@ -83,11 +83,12 @@ export function placementRect(source: Rect | null, aspect: number): Rect {
 }
 
 /**
- * The canvas elements an artifact renders as, positioned at `rect`: a single
- * iframe element for sims, a converted skeleton group for diagrams.
+ * Các phần tử trên bảng vẽ mà một kết quả hiển thị thành, được đặt tại `rect`:
+ * một phần tử iframe duy nhất cho mô phỏng, một nhóm khung đã chuyển đổi cho sơ
+ * đồ.
  *
- * Shared by live analyze placement, refine rebuilds, and cache spawning so
- * all three produce identical output.
+ * Dùng chung cho việc đặt kết quả khi phân tích trực tiếp, dựng lại khi tinh
+ * chỉnh, và tái tạo từ bộ nhớ tạm, nên cả ba đều tạo ra kết quả giống hệt nhau.
  */
 export function artifactSceneElements(
   artifact: Artifact,
@@ -113,22 +114,22 @@ function randomInt(): number {
   return buf[0]!;
 }
 
-/** Any non-transparent fill on a generated iframe — Excalidraw paints it on
- *  the canvas behind the sim, so it must stay transparent. */
+/** Mọi hình tô không trong suốt trên một iframe được sinh ra — Excalidraw vẽ nó
+ *  lên bảng vẽ phía sau mô phỏng, nên nó phải giữ trong suốt. */
 const needsClearBg = (el: ExcalidrawElement): boolean =>
   el.type === 'iframe' && !!artifactIdOf(el) && el.backgroundColor !== 'transparent';
 
-/** Make an iframe element's stored html carry the same artifact id as its
- *  customData.artifactId — injects when the tag is absent and rewrites it
- *  when stale (elements copied on the canvas get rebound to a new artifact).
- *  Also drops any opaque fill so the sim blends with the board.
+/** Làm cho html đã lưu của một phần tử iframe mang đúng id kết quả như
+ *  customData.artifactId của nó — chèn vào khi thiếu thẻ và ghi lại khi thẻ đã
+ *  cũ (các phần tử được sao chép trên bảng vẽ sẽ được gắn lại vào một kết quả
+ *  mới). Đồng thời bỏ mọi hình tô đục để mô phỏng hòa vào bảng.
  *
- *  NOTE: the iframe's `sandbox` attribute is built inside Excalidraw and only
- *  gains `allow-same-origin` for its own recognized embed types, so an
- *  artifact document always runs on an opaque origin. Its data fetches are
- *  therefore cross-origin and depend on the asset host sending
- *  `Access-Control-Allow-Origin` — see the shim in scripts/export-scenarios.mts
- *  and the assetCors plugin in vite.config.ts. */
+ *  LƯU Ý: thuộc tính `sandbox` của iframe được dựng bên trong Excalidraw và chỉ
+ *  nhận `allow-same-origin` cho các kiểu nhúng mà chính nó công nhận, nên một
+ *  tài liệu kết quả luôn chạy trên origin đục. Vì vậy các lời gọi dữ liệu của nó
+ *  là cross-origin và phụ thuộc vào việc máy chủ tài sản gửi
+ *  `Access-Control-Allow-Origin` — xem shim trong scripts/export-scenarios.mts
+ *  và plugin assetCors trong vite.config.ts. */
 export function syncArtifactGlobals(el: ExcalidrawElement): ExcalidrawElement {
   const cd = el.customData as
     | {
@@ -156,8 +157,8 @@ export function syncArtifactGlobals(el: ExcalidrawElement): ExcalidrawElement {
   };
 }
 
-/** Backfill pass for whole scenes — run on load so restored iframes can
- *  identify themselves in the postMessage bridge. */
+/** Lượt bù trừ cho cả cảnh — chạy khi tải để các iframe được khôi phục có thể
+ *  tự nhận diện trong cầu postMessage. */
 export function ensureArtifactGlobals(
   elements: readonly ExcalidrawElement[],
 ): ExcalidrawElement[] {
@@ -165,8 +166,8 @@ export function ensureArtifactGlobals(
 }
 
 /**
- * Build an Excalidraw `iframe` element wrapping a generated HTML document —
- * the same shape Excalidraw's own wireframe-to-code produces
+ * Dựng một phần tử `iframe` của Excalidraw bọc lấy tài liệu HTML được sinh ra —
+ * đúng cấu trúc mà tính năng wireframe-to-code của chính Excalidraw tạo ra
  * (`customData.generationData`).
  */
 export function makeSimIframeElement(
@@ -212,10 +213,10 @@ const VIRTUAL_W = 1000;
 const VIRTUAL_H = 750;
 
 /**
- * Convert the model's skeleton list (1000x750 virtual canvas) into real
- * scene elements fitted into `rect`, tagged with the artifact id and one
- * shared group. Skeleton ids are preserved (regenerateIds: false) so refine
- * ops can address elements by id.
+ * Chuyển danh sách khung của mô hình (bảng vẽ ảo 1000x750) thành các phần tử
+ * cảnh thật, được khớp vừa vào `rect`, gắn id kết quả và một nhóm dùng chung.
+ * Id của khung được giữ nguyên (regenerateIds: false) để các op tinh chỉnh có
+ * thể nhắm tới phần tử theo id.
  */
 export function skeletonToSceneElements(
   skeleton: SkeletonElement[],
@@ -249,7 +250,8 @@ export function skeletonToSceneElements(
   }));
 }
 
-/** Mark every generated element of an artifact deleted (undo-safe removal). */
+/** Đánh dấu đã xóa mọi phần tử được sinh ra của một kết quả (xóa an toàn với
+ *  hoàn tác). */
 export function markArtifactDeleted(
   elements: readonly ExcalidrawElement[],
   artifactId: string,
@@ -268,7 +270,7 @@ export function markArtifactDeleted(
   );
 }
 
-/** Swap the html inside an artifact's iframe element. */
+/** Thay html bên trong phần tử iframe của một kết quả. */
 export function updateIframeHtml(
   elements: readonly ExcalidrawElement[],
   artifactId: string,
@@ -293,9 +295,9 @@ export function updateIframeHtml(
   });
 }
 
-/** Persist live iframe state (e.g. a flipbook's current page) on the
- *  element's customData — saved with the scene, survives reloads and refine
- *  html swaps. */
+/** Lưu trạng thái sống của iframe (ví dụ trang hiện tại của một cuốn lật) vào
+ *  customData của phần tử — được lưu cùng cảnh, tồn tại qua các lần tải lại và
+ *  các lần thay html khi tinh chỉnh. */
 export function setIframeState(
   elements: readonly ExcalidrawElement[],
   artifactId: string,
@@ -316,9 +318,10 @@ export function setIframeState(
   });
 }
 
-/** Pending-artifact ids are namespaced per analyze run
- *  (`__pending__:<runId>`) so parallel analyses never fight over the shared
- *  placeholder: run A's result only promotes run A's elements. */
+/** Id kết quả đang chờ được đặt không gian tên theo từng lượt phân tích
+ *  (`__pending__:<runId>`) để các lượt phân tích song song không bao giờ tranh
+ *  nhau phần giữ chỗ dùng chung: kết quả của lượt A chỉ thăng cấp phần tử của
+ *  lượt A. */
 const PENDING_PREFIX = '__pending__:';
 
 export function pendingArtifactId(runId: string): string {
@@ -342,7 +345,8 @@ export function pendingArtifactElements(
   });
 }
 
-/** Undo-safe deletion for pending elements — all runs, or one run's. */
+/** Xóa an toàn với hoàn tác cho các phần tử đang chờ — mọi lượt, hoặc một
+ *  lượt. */
 export function markPendingArtifactsDeleted(
   elements: readonly ExcalidrawElement[],
   pendingId?: string,
@@ -362,10 +366,9 @@ export function markPendingArtifactsDeleted(
   });
 }
 
-/** Promote a run's pending placeholder into the real artifact — same
- *  element, same rect the user may have moved/resized; only id + html
- *  change. The connector arrow shares the pending id and is retagged here
- *  too. */
+/** Thăng cấp phần giữ chỗ đang chờ của một lượt thành kết quả thật — cùng phần
+ *  tử, cùng rect mà người dùng có thể đã di chuyển/đổi kích thước; chỉ id + html
+ *  thay đổi. Mũi tên nối dùng chung id đang chờ cũng được gắn thẻ lại ở đây. */
 export function promotePendingArtifact(
   elements: readonly ExcalidrawElement[],
   pendingId: string,
@@ -391,16 +394,17 @@ export function promotePendingArtifact(
   });
 }
 
-/** Route a connector arrow around whatever sits in its corridor.
+/** Dẫn đường cho một mũi tên nối vòng qua bất cứ thứ gì nằm trong hành lang của
+ *  nó.
  *
- *  An obstacle is any non-generated element vertically between the two
- *  endpoints whose x-range intersects the corridor span — including elements
- *  wider than the corridor (a spanning frame contributes the distance to its
- *  nearer edge, which is what plain edge-scanning misses).
+ *  Vật cản là mọi phần tử không phải do mô hình sinh ra, nằm theo chiều dọc giữa
+ *  hai đầu mút và có khoảng x giao với dải hành lang — kể cả những phần tử rộng
+ *  hơn hành lang (một khung bao trùm đóng góp khoảng cách tới mép gần hơn của nó,
+ *  thứ mà cách quét mép thông thường bỏ sót).
  *
- *  Returns `bow` = signed sideways clearance (+right / −left) and `band` =
- *  the [top, bottom] fraction of the run the route must hold the dodge
- *  through. No obstacle -> gentle decorative arc. */
+ *  Trả về `bow` = độ lệch ngang có dấu (+phải / −trái) và `band` = tỉ lệ
+ *  [trên, dưới] của đoạn đường mà tuyến phải giữ độ né qua. Không có vật cản ->
+ *  một cung trang trí nhẹ. */
 export function connectorRoute(
   elements: readonly ExcalidrawElement[],
   from: Rect,
@@ -412,8 +416,8 @@ export function connectorRoute(
   const dy = to.y - top;
   if (dy <= 0) return { bow: 24, band: null };
 
-  const HALF = 30; // corridor half-width around the drop line
-  const PAD = 36; // breathing room beyond the obstacle edge
+  const HALF = 30; // nửa chiều rộng hành lang quanh đường rơi
+  const PAD = 36; // khoảng thở phía ngoài mép vật cản
   const cLeft = Math.min(sx, tx) - HALF;
   const cRight = Math.max(sx, tx) + HALF;
 
@@ -428,8 +432,8 @@ export function connectorRoute(
   );
   if (!blockers.length) return { bow: 24, band: null };
 
-  // Dodging RIGHT must clear every blocker's right edge measured from the
-  // drop line; same for LEFT. Pick the smaller excursion.
+  // Né sang PHẢI phải vượt qua mép phải của mọi vật cản tính từ đường rơi;
+  // tương tự với TRÁI. Chọn quãng dịch chuyển nhỏ hơn.
   let right = 0;
   let left = 0;
   for (const el of blockers) {
@@ -449,13 +453,13 @@ export function connectorRoute(
   return { bow, band };
 }
 
-/** Curved connector arrow: source bottom-center -> target top-center as a
- *  smooth arc. With a `band` (from connectorRoute) the interior points sit at
- *  the obstacle's vertical band and the bow is its actual clearance — the
- *  curve exits, runs alongside, and re-enters below. `sourceId`/`targetId`
- *  become Excalidraw element bindings, so the arrow re-routes when either end
- *  moves. `fullPoints` in customData keeps the final offsets so
- *  setArrowProgress can animate the draw-in. */
+/** Mũi tên nối cong: từ đáy-giữa của nguồn -> đỉnh-giữa của đích theo một cung
+ *  mượt. Khi có `band` (từ connectorRoute), các điểm bên trong nằm tại dải dọc
+ *  của vật cản và độ cong chính là khoảng né thật — đường cong đi ra, chạy song
+ *  song, rồi quay vào ở phía dưới. `sourceId`/`targetId` trở thành ràng buộc
+ *  phần tử của Excalidraw, nên mũi tên tự dẫn lại đường khi một trong hai đầu di
+ *  chuyển. `fullPoints` trong customData giữ các độ lệch cuối cùng để
+ *  setArrowProgress có thể tạo hiệu ứng vẽ dần. */
 export function makeConnectorArrow(
   from: Rect,
   to: Rect,
@@ -529,8 +533,8 @@ export function makeConnectorArrow(
   } as unknown as ExcalidrawElement;
 }
 
-/** Register `arrowId` under `boundElements` on each endpoint element —
- *  required companion of startBinding/endBinding. */
+/** Đăng ký `arrowId` trong `boundElements` trên mỗi phần tử đầu mút — phần bắt
+ *  buộc đi kèm startBinding/endBinding. */
 export function bindArrow(
   elements: readonly ExcalidrawElement[],
   arrowId: string,
@@ -554,8 +558,8 @@ export function bindArrow(
   ) as ExcalidrawElement[];
 }
 
-/** Draw-in animation frame for a connector arrow: grows every point of the
- *  curved path toward its stored offset and fades in. p goes 0 → 1. */
+/** Khung hình động tác vẽ dần cho một mũi tên nối: kéo mọi điểm của đường cong
+ *  về độ lệch đã lưu và mờ dần hiện ra. p chạy từ 0 → 1. */
 export function setArrowProgress(
   elements: readonly ExcalidrawElement[],
   arrowId: string,
@@ -565,7 +569,7 @@ export function setArrowProgress(
     if (el.id !== arrowId || el.type !== 'arrow') return el;
     const cd = el.customData as Record<string, unknown> | undefined;
     const full = (cd?.fullPoints as [number, number][] | undefined) ?? [[0, 0]];
-    const ease = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    const ease = 1 - Math.pow(1 - p, 3); // giảm tốc bậc ba (ease-out cubic)
     return {
       ...el,
       opacity: Math.round(p * 100),
@@ -580,9 +584,9 @@ export function setArrowProgress(
   }) as ExcalidrawElement[];
 }
 
-/** Self-contained loading doc for the pending iframe: a Game-of-Life canvas
- *  backdrop with rotating status lines and a live elapsed timer. Vanilla JS —
- *  artifacts can't rely on React inside the srcdoc. */
+/** Tài liệu tải độc lập cho iframe đang chờ: nền canvas Game-of-Life với các
+ *  dòng trạng thái luân phiên và đồng hồ đếm thời gian chạy. JS thuần — kết quả
+ *  không thể dựa vào React bên trong srcdoc. */
 export function loadingArtifactHtml(): string {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>
@@ -594,11 +598,11 @@ canvas{position:absolute;inset:0}
 #elapsed{font:11px ui-monospace,monospace;color:#94a3b8;font-variant-numeric:tabular-nums}
 </style></head><body>
 <canvas id="g"></canvas>
-<div id="ui"><div id="msg"><span id="msgTxt"></span></div><div id="elapsed">0.0s</div></div>
+<div id="ui"><div id="msg"><span id="msgTxt"></span></div><div id="elapsed">0.0 giây</div></div>
 <script>
 var cv=document.getElementById('g'),cx=cv.getContext('2d');
 var CELL=14,GAP=2,DENSITY=.28,STEP=620,FADE=920,MAXA=.22;
-var PH=["Reading the sketch…","Interpreting the content…","Deriving the model…","Building the simulation…","Finishing up…"];
+var PH=["Đang đọc bản phác thảo…","Đang diễn giải nội dung…","Đang suy ra mô hình…","Đang dựng mô phỏng…","Sắp xong…"];
 var cols=0,rows=0,grid=[],next=[],opa=[],last=0,lastStep=0,t0=Date.now();
 function seed(c,r){cols=Math.max(1,Math.ceil(c/CELL));rows=Math.max(1,Math.ceil(r/CELL));
  grid=[];next=new Array(cols*rows);opa=[];
@@ -628,20 +632,20 @@ function showMsg(){msgEl.style.opacity=0;msgEl.style.transform='translateY(8px)'
 showMsg();setInterval(function(){mi=(mi+1)%PH.length;showMsg();},1400);
 var el=document.getElementById('elapsed');
 setInterval(function(){var s=(Date.now()-t0)/1000;
- el.textContent=s<60?s.toFixed(1)+'s':Math.floor(s/60)+'m '+(s%60).toFixed(1)+'s';},100);
+ el.textContent=s<60?s.toFixed(1)+' giây':Math.floor(s/60)+' phút '+(s%60).toFixed(1)+' giây';},100);
 addEventListener('resize',resize);resize();requestAnimationFrame(frame);
 </script></body></html>`;
 }
 
-/** Default aspect ratios used when placing a new artifact. */
+/** Tỉ lệ khung mặc định dùng khi đặt một kết quả mới. */
 export function aspectFor(kind: Artifact['kind']): number {
   return kind === 'elements' ? VIRTUAL_W / VIRTUAL_H : 4 / 3;
 }
 
-/** Single text element via the skeleton converter — defaults (font, metrics)
- *  are filled by restore() on scene load. Tagging it with an artifactId makes
- *  it a generated element: excluded from analyze snapshots and deleted
- *  together with its artifact. */
+/** Một phần tử văn bản duy nhất qua bộ chuyển đổi khung — các giá trị mặc định
+ *  (phông chữ, số đo) được restore() điền khi tải cảnh. Gắn artifactId cho nó
+ *  khiến nó trở thành phần tử được sinh ra: bị loại khỏi ảnh chụp phân tích và bị
+ *  xóa cùng với kết quả của nó. */
 export function makeTextElement(
   x: number,
   y: number,

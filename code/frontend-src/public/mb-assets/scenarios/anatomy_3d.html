@@ -1,34 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head><script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Yêu cầu thất bại';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Anatomy 3D</title>
+<title>Giải phẫu 3D</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden;
                font-family: ui-sans-serif, system-ui, sans-serif;
@@ -77,11 +78,11 @@ addEventListener('unhandledrejection', function(e){
 </head>
 <body>
 <div id="stage"></div>
-<div id="hud"><div id="title">Anatomy 3D</div></div>
+<div id="hud"><div id="title">Giải phẫu 3D</div></div>
 <div id="tip"></div>
 <div id="bar"></div>
-<div id="status">loading…</div>
-<div id="overlay"><div class="spin"></div><div class="msg">Loading anatomy model…</div></div>
+<div id="status">đang tải…</div>
+<div id="overlay"><div class="spin"></div><div class="msg">Đang tải mô hình giải phẫu…</div></div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -102,11 +103,11 @@ const fail = (msg) => {
   overlay.querySelector('.spin').style.display = 'none';
 };
 
-// human-atlas model-download.ts: static hosts may return the .gz either
-// raw or transport-decoded — inspect magic bytes, decode once.
+// human-atlas model-download.ts: máy chủ tĩnh có thể trả tệp .gz ở dạng
+// thô hoặc đã được giải mã khi truyền — kiểm tra magic bytes rồi giải mã một lần.
 async function fetchChunk(url, expectedBytes) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`asset ${url} -> ${res.status}`);
+  if (!res.ok) throw new Error(`tài nguyên ${url} -> ${res.status}`);
   const payload = await res.arrayBuffer();
   const sig = new Uint8Array(payload, 0, 2);
   const gz = sig[0] === 0x1f && sig[1] === 0x8b;
@@ -117,12 +118,12 @@ async function fetchChunk(url, expectedBytes) {
       ).arrayBuffer()
     : payload;
   if (buf.byteLength !== expectedBytes)
-    throw new Error('An anatomy file was incomplete.');
+    throw new Error('Một tệp dữ liệu giải phẫu bị thiếu hoặc không đầy đủ.');
   return buf;
 }
 
 async function main() {
-  // ---------------- data ----------------
+  // ---------------- dữ liệu ----------------
   const data = await (await fetch(
     `/mb-assets/atlas/structures.json`)).json();
   const structures = data.structures || {};
@@ -135,10 +136,10 @@ async function main() {
   const colors = data.systemColors || {};
   const SYSTEM_ORDER = Object.keys(systems).sort((a, b) =>
     systems[b].length - systems[a].length);
-  // Integumentary (skin shell) starts hidden — it occludes everything.
+  // Lớp bì (vỏ da) mặc định bị ẩn — nó che khuất mọi thứ.
   const DEFAULT_HIDDEN = new Set(['integumentary']);
 
-  // ---------------- three setup ----------------
+  // ---------------- thiết lập three.js ----------------
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -170,7 +171,7 @@ async function main() {
   }).observe(stage);
   renderer.setSize(stage.clientWidth, stage.clientHeight);
 
-  // ---------------- model ----------------
+  // ---------------- mô hình ----------------
   const systemMats = new Map();
   const matFor = (sys) => {
     if (!systemMats.has(sys)) {
@@ -210,18 +211,18 @@ async function main() {
     }
     loaded++;
     overlayMsg.textContent =
-      `Loading anatomy model… ${Math.round(loaded / chunks.length * 100)}%`;
+      `Đang tải mô hình giải phẫu… ${Math.round(loaded / chunks.length * 100)}%`;
   }
-  // 3 concurrent fetches, like upstream.
+  // 3 lượt tải song song, giống bản gốc.
   let cursor = 0;
   await Promise.all(Array.from({ length: 3 }, async () => {
     while (cursor < chunks.length) await loadChunk(cursor++);
   }));
-  if (!parts.size) throw new Error('no parts decoded');
+  if (!parts.size) throw new Error('không giải mã được bộ phận nào');
 
-  // ---------------- state ----------------
-  const hidden = new Set();         // dbl-click hidden part ids
-  const sysVisible = {};            // system -> bool
+  // ---------------- trạng thái ----------------
+  const hidden = new Set();         // id bộ phận bị ẩn bằng nhấp đúp
+  const sysVisible = {};            // hệ cơ quan -> bool
   for (const s of SYSTEM_ORDER) sysVisible[s] = !DEFAULT_HIDDEN.has(s);
   let focusIds = new Set();
   let selected = null;
@@ -260,8 +261,8 @@ async function main() {
       mesh.visible = vis;
     }
   }
-  let searchIds = null; // Set | null; populated through resolveFocus so
-                        // 'heart' etc. hit concepts, not just name substrings
+  let searchIds = null; // Set | null; được điền qua resolveFocus để
+                        // 'heart'… khớp cả khái niệm, không chỉ chuỗi con của tên
 
   const HIGHLIGHT = 0x6bd9c7;
   function paint() {
@@ -281,10 +282,73 @@ async function main() {
     }
   }
 
-  // term -> part ids, mirroring backend scenarios._resolve_term
+  // Bí danh tiếng Việt -> thuật ngữ tiếng Anh mà bộ phân giải đã hiểu,
+  // hoặc trực tiếp là khoá hệ cơ quan (system) trong dữ liệu atlas.
+  const VN_ALIASES = {
+    // hệ cơ quan
+    'hệ xương': 'skeleton', 'bộ xương': 'skeleton', 'xương': 'skeleton',
+    'hệ cơ': 'muscles', 'bắp': 'muscle', 'cơ': 'muscle',
+    'hệ thần kinh': 'nervous system', 'thần kinh': 'nerves',
+    'hệ tiêu hóa': 'digestive system', 'tiêu hóa': 'digestive system',
+    'hệ hô hấp': 'respiratory system', 'hô hấp': 'respiratory system',
+    'hệ tiết niệu': 'urinary system', 'tiết niệu': 'urinary system',
+    'hệ tuần hoàn': 'circulatory system', 'tuần hoàn': 'circulatory system',
+    'hệ bạch huyết': 'lymph nodes', 'bạch huyết': 'lymph nodes',
+    'hệ nội tiết': 'endocrine', 'nội tiết': 'endocrine',
+    'hệ sinh dục': 'reproductive', 'sinh dục': 'reproductive',
+    'hệ giác quan': 'sensory', 'giác quan': 'sensory',
+    'hệ bao phủ': 'integumentary', 'hệ da': 'skin', 'da': 'skin',
+    'mô liên kết': 'connective',
+    'động mạch': 'arteries', 'tĩnh mạch': 'veins', 'mạch máu': 'blood',
+    'hệ tim': 'cardiac', 'tim': 'heart',
+    // nội tạng
+    'não': 'brain', 'bộ não': 'brain', 'phổi': 'lung', 'gan': 'liver',
+    'thận': 'kidney', 'mắt': 'eye', 'dạ dày': 'stomach',
+    'ruột': 'intestine', 'ruột non': 'small intestine', 'ruột già': 'colon',
+    'đại tràng': 'colon', 'bàng quang': 'bladder', 'bọng đái': 'bladder',
+    'tủy sống': 'spinal cord', 'máu': 'blood', 'lưỡi': 'tongue',
+    'răng': 'tooth', 'mũi': 'nose', 'miệng': 'mouth', 'tai': 'ear',
+    'khí quản': 'trachea', 'thực quản': 'esophagus', 'tụy': 'pancreas',
+    'tuyến tụy': 'pancreas', 'lá lách': 'spleen', 'lách': 'spleen',
+    'túi mật': 'gallbladder', 'cơ hoành': 'diaphragm', 'hoành': 'diaphragm',
+    // xương và khớp
+    'sọ': 'skull', 'hộp sọ': 'skull', 'xương sọ': 'skull',
+    'hàm': 'jaw', 'xương hàm': 'mandible', 'đầu': 'head', 'mặt': 'face',
+    'cổ': 'neck', 'cột sống': 'spine', 'xương sống': 'spine',
+    'đốt sống': 'vertebrae', 'xương sườn': 'ribs', 'sườn': 'ribs',
+    'xương ức': 'sternum', 'xương chậu': 'pelvis', 'chậu': 'pelvis',
+    'hông': 'hip', 'xương đùi': 'femur', 'đùi': 'femur',
+    'tay': 'arm', 'cánh tay': 'arm', 'chân': 'leg', 'bàn tay': 'hand',
+    'bàn chân': 'foot', 'đầu gối': 'knee', 'gối': 'knee', 'vai': 'shoulder',
+    'ngực': 'chest', 'lồng ngực': 'thorax', 'bụng': 'abdomen',
+    'hạch bạch huyết': 'lymph nodes',
+    // cơ
+    'bắp tay': 'biceps brachii', 'cơ nhị đầu': 'biceps brachii',
+    'cơ tứ đầu': 'quadriceps', 'cơ đùi trước': 'quadriceps',
+    'cơ gân kheo': 'biceps femoris', 'cơ tam đầu': 'triceps brachii',
+    'bắp chân': 'gastrocnemius', 'cơ mông': 'gluteus', 'cơ ngực': 'pectoralis',
+  };
+  // Bỏ dấu tiếng Việt để người dùng gõ không dấu vẫn tìm được.
+  const foldVN = (s) => String(s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+    .replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const VN_ALIASES_FOLD = {};
+  for (const [vi, en] of Object.entries(VN_ALIASES))
+    VN_ALIASES_FOLD[foldVN(vi)] = en;
+
+  // thuật ngữ -> id bộ phận, mô phỏng scenarios._resolve_term ở backend
   function resolveFocus(term) {
-    const t = String(term || '').trim().toLowerCase();
+    let t = String(term || '').trim().toLowerCase();
     if (!t) return { ids: [] };
+    // Bí danh tiếng Việt (tim, não, phổi, xương…) -> thuật ngữ tiếng Anh
+    // hoặc hệ cơ quan, rồi đi tiếp theo đúng luồng phân giải cũ.
+    const vi = VN_ALIASES[t] || VN_ALIASES[t.replace(/\s+/g, '_')] ||
+      VN_ALIASES_FOLD[foldVN(t)];
+    if (vi !== undefined) {
+      if (systems[vi])
+        return { ids: [...new Set(systems[vi].filter((e) => parts.has(e)))] };
+      t = String(vi).toLowerCase();
+    }
     const key = t.replace(/\s+/g, '_');
     if (parts.has(key)) return { ids: [key] };
     const asList = (v) => v == null ? [] : (Array.isArray(v) ? v : [v]);
@@ -301,7 +365,7 @@ async function main() {
         out.push(...(systems[s] || []).filter((e) => parts.has(e)));
       for (const sub of asList(spec.substr))
         for (const [id, p] of parts)
-          if ((p.name || '').toLowerCase().includes(String(sub).toLowerCase()))
+          if ((p.part.name || '').toLowerCase().includes(String(sub).toLowerCase()))
             out.push(id);
       out.push(...asList(spec.mesh).filter((m) => parts.has(m)));
       return { ids: [...new Set(out)] };
@@ -316,11 +380,20 @@ async function main() {
     return { ids: [], notFound: true };
   }
 
-  // ---------------- UI ----------------
+  // ---------------- giao diện ----------------
+  // Nhãn tiếng Việt cho các chip lọc; khoá lọc vẫn là id hệ cơ quan trong dữ liệu.
+  const SYSTEM_LABELS = {
+    skeletal: 'Hệ xương', muscular: 'Hệ cơ', nervous: 'Hệ thần kinh',
+    sensory: 'Hệ giác quan', connective: 'Mô liên kết', arterial: 'Hệ động mạch',
+    venous: 'Hệ tĩnh mạch', cardiac: 'Hệ tim', endocrine: 'Hệ nội tiết',
+    digestive: 'Hệ tiêu hóa', respiratory: 'Hệ hô hấp',
+    lymphatic: 'Hệ bạch huyết', integumentary: 'Hệ da',
+    reproductive: 'Hệ sinh dục', urinary: 'Hệ tiết niệu',
+  };
   const chipButtons = {};
   for (const s of SYSTEM_ORDER) {
     const b = document.createElement('button');
-    b.textContent = s;
+    b.textContent = SYSTEM_LABELS[s] || s;
     chipButtons[s] = b;
     b.onclick = () => {
       sysVisible[s] = !sysVisible[s];
@@ -331,7 +404,7 @@ async function main() {
     bar.appendChild(b);
   }
   const search = document.createElement('input');
-  search.placeholder = 'search — e.g. heart, femur…';
+  search.placeholder = 'Tìm kiếm — ví dụ: tim, xương đùi…';
   search.oninput = () => {
     query = search.value;
     searchIds = query.trim()
@@ -341,7 +414,7 @@ async function main() {
   };
   bar.appendChild(search);
   const resetBtn = document.createElement('button');
-  resetBtn.textContent = 'reset';
+  resetBtn.textContent = 'Đặt lại';
   resetBtn.onclick = () => {
     hidden.clear(); focusIds.clear(); selected = null; query = '';
     search.value = ''; searchIds = null;
@@ -355,7 +428,7 @@ async function main() {
   };
   bar.appendChild(resetBtn);
 
-  // ---------------- events ----------------
+  // ---------------- sự kiện ----------------
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   function pick(ev) {
@@ -381,13 +454,13 @@ async function main() {
     } else tipEl.style.display = 'none';
   });
   renderer.domElement.addEventListener('pointerup', (ev) => {
-    if (performance.now() - downAt > 350) return; // was a drag
+    if (performance.now() - downAt > 350) return; // vừa rồi là thao tác kéo
     clickCount++;
     setTimeout(() => {
       const id = pick(ev);
-      if (clickCount >= 2 && id) {          // dbl-click: peel part away
+      if (clickCount >= 2 && id) {          // nhấp đúp: bóc tách bộ phận ra
         hidden.add(id); applyVisibility();
-      } else if (clickCount === 1 && id) {  // click: select + frame
+      } else if (clickCount === 1 && id) {  // nhấp một lần: chọn + căn khung
         selected = selected === id ? null : id;
         paint();
         if (selected) {
@@ -399,14 +472,14 @@ async function main() {
     }, 240);
   });
 
-  // ---------------- focus from params ----------------
+  // ---------------- focus từ tham số ----------------
   const f = resolveFocus(PARAMS.focus);
   focusIds = new Set(f.ids);
   if (f.notFound)
-    statusEl.textContent = `"${PARAMS.focus}" not in model`;
+    statusEl.textContent = `"${PARAMS.focus}" không có trong mô hình`;
   else
-    statusEl.textContent = 'drag to orbit · dbl-click hides a part';
-  statusEl.title = 'Anatomy data: BodyParts3D 4.0, CC BY 4.0';
+    statusEl.textContent = 'kéo để xoay · nhấp đúp để ẩn một bộ phận';
+  statusEl.title = 'Dữ liệu giải phẫu: BodyParts3D 4.0, CC BY 4.0';
   if (PARAMS.isolate && f.ids.length) {
     for (const [id] of parts) {
       if (!focusIds.has(id)) hidden.add(id);
@@ -414,7 +487,7 @@ async function main() {
   }
   if (PARAMS.focus) {
     document.getElementById('title').textContent =
-      'Anatomy 3D — ' + String(PARAMS.focus);
+      'Giải phẫu 3D — ' + String(PARAMS.focus);
   }
   applyVisibility();
   paint();

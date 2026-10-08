@@ -1,8 +1,8 @@
 /**
- * artifactDoc — pure HTML-document transforms applied to stored artifact docs
- * (model-generated html_sims and anything imported). Ported from ai4edu's
- * `lib/artifactDoc.ts`, minus the legacy-scaffold migration that only
- * applied to that project's pre-baked docs.
+ * artifactDoc — các phép biến đổi tài liệu HTML thuần áp dụng lên tài liệu kết
+ * quả đã lưu (html_sim do mô hình sinh ra và mọi thứ được nhập vào). Bản chuyển
+ * từ `lib/artifactDoc.ts` của ai4edu, bỏ đi bước di trú theo khung cũ vốn chỉ áp
+ * dụng cho các tài liệu đóng gói sẵn của dự án đó.
  */
 import { BOARD_BG } from './boardTheme';
 
@@ -12,10 +12,10 @@ export const globalsTag = (artifactId: string): string =>
 export const GLOBALS_TAG_RE =
   /<script>window\.__MAGIC_BOARD_ARTIFACT_ID__=[^<]*<\/script>/;
 
-/** Inject the artifact id into an iframe document so scripts inside the
- *  sandboxed iframe can identify themselves in postMessage traffic.
- *  (Artifact iframes run on an opaque origin — no localStorage, and the
- *  parent can't reach their DOM, so postMessage is the only channel.) */
+/** Chèn id kết quả vào một tài liệu iframe để các script bên trong iframe được
+ *  sandbox có thể tự nhận diện trong lưu lượng postMessage.
+ *  (iframe của kết quả chạy trên origin đục — không có localStorage, và trang cha
+ *  không thể chạm tới DOM của chúng, nên postMessage là kênh duy nhất.) */
 export function injectArtifactGlobals(html: string, artifactId: string): string {
   const tag = globalsTag(artifactId);
   const head = html.indexOf('<head>');
@@ -28,10 +28,10 @@ export function injectArtifactGlobals(html: string, artifactId: string): string 
 
 const BOARD_BLEND_TAG = '<style data-magic-board-blend>';
 
-/** Generated sims paint their own opaque background (sandboxed iframes can't
- *  be truly transparent), so seed them with the board color and live-sync it
- *  over the postMessage bridge when the canvas color changes. !important so
- *  the doc's own body styling can't fight it. */
+/** Các mô phỏng được sinh ra tự tô nền đục của chúng (iframe bị sandbox không thể
+ *  trong suốt thật sự), nên hãy khởi tạo chúng bằng màu của bảng và đồng bộ trực
+ *  tiếp qua cầu postMessage khi màu bảng vẽ thay đổi. Dùng !important để kiểu
+ *  dáng body của chính tài liệu không thể chống lại. */
 export function ensureBoardBlend(html: string): string {
   if (html.includes('boardBg') || html.includes('data-magic-board-blend')) {
     return html;
@@ -52,6 +52,6 @@ export function ensureBoardBlend(html: string): string {
   return html + tag;
 }
 
-/** Stored-doc pipeline — applied everywhere a doc enters or survives on an
- *  element. */
+/** Đường ống xử lý tài liệu đã lưu — được áp dụng ở mọi nơi tài liệu đi vào hoặc
+ *  tồn tại trên một phần tử. */
 export const prepareArtifactHtml = (html: string): string => ensureBoardBlend(html);

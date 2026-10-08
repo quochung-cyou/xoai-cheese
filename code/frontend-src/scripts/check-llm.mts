@@ -177,30 +177,31 @@ console.log('response — error surfaces');
 
 console.log('response — truncation is reported clearly (small analyze cap)');
 {
-  let msg = '';
+  // Copy is localised, so assert the two failure modes are distinguishable
+  // rather than matching English text: a truncated response must not produce
+  // the same message as a model that answered with whitespace only.
+  let truncated = '';
   try {
     parseChatResponse({
       choices: [{ message: { content: '' }, finish_reason: 'length' }],
     });
   } catch (e) {
-    msg = e instanceof LlmError ? e.message : String(e);
+    truncated = e instanceof LlmError ? e.message : String(e);
   }
-  check(
-    'finish_reason=length explains the token budget',
-    msg.includes('cut off') && msg.includes('max tokens'),
-    msg,
-  );
-}
-{
-  let msg = '';
+  let empty = '';
   try {
     parseChatResponse({
       choices: [{ message: { content: '   ' }, finish_reason: 'stop' }],
     });
   } catch (e) {
-    msg = e instanceof LlmError ? e.message : String(e);
+    empty = e instanceof LlmError ? e.message : String(e);
   }
-  check('whitespace-only output is treated as empty', msg.includes('returned nothing'), msg);
+  check('finish_reason=length raises a specific message', truncated.length > 20, truncated);
+  check(
+    'whitespace-only output raises a different message',
+    empty.length > 20 && empty !== truncated,
+    empty,
+  );
 }
 
 report();

@@ -1,30 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head><script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Yêu cầu thất bại';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>
 <meta charset="utf-8">
 <style>
@@ -49,14 +50,14 @@ addEventListener('unhandledrejection', function(e){
 </style>
 </head>
 <body>
-<header>RC Circuit — Capacitor Charging<span id="status">ready</span></header>
+<header>Mạch RC — Nạp tụ điện<span id="status">sẵn sàng</span></header>
 <div id="stage">
   <div class="half"><span class="lab">i(t) = V/R · e^(−t/τ)</span><canvas id="cvI"></canvas></div>
   <div class="half"><span class="lab">v_C(t) = V(1 − e^(−t/τ))</span><canvas id="cvV"></canvas></div>
 </div>
 <div id="controls">
-  <button id="play">Charge</button>
-  <button id="reset" class="ghost">Discharge</button>
+  <button id="play">Nạp</button>
+  <button id="reset" class="ghost">Phóng điện</button>
   <label>V <input id="V" type="range" min="1" max="24" value="10"><span class="val" id="VV"></span></label>
   <label>R <input id="R" type="range" min="1" max="100" value="10"><span class="val" id="RV"></span></label>
   <label>C <input id="C" type="range" min="1" max="20" value="5"><span class="val" id="CV"></span></label>
@@ -77,7 +78,7 @@ let t = 0, playing = false, raf = null, last = 0;
 const tau = () => P.R * P.C;
 const iAt = (t) => (P.V / P.R) * Math.exp(-t / tau());
 const vAt = (t) => P.V * (1 - Math.exp(-t / tau()));
-const tEnd = () => 5 * tau(); // ~99.3% charged
+const tEnd = () => 5 * tau(); // ~99,3% đã nạp
 
 function plot(ctx, cv, yMax, fn, color) {
   const w = cv.width, h = cv.height;
@@ -86,24 +87,24 @@ function plot(ctx, cv, yMax, fn, color) {
   for (let gx = 10; gx < w; gx += 30) for (let gy = 10; gy < h; gy += 30) ctx.fillRect(gx, gy, 1.5, 1.5);
   const T = tEnd(), sx = (w - 50) / T, sy = (h - 50) / yMax;
   const ox = 34, oy = h - 30;
-  // axes
+  // trục tọa độ
   ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, h); ctx.stroke();
-  // τ marker
+  // vạch đánh dấu τ
   ctx.strokeStyle = '#f59e0b'; ctx.setLineDash([3, 3]); ctx.beginPath();
   ctx.moveTo(ox + tau() * sx, 0); ctx.lineTo(ox + tau() * sx, h); ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = '#f59e0b'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
   ctx.fillText('τ', ox + tau() * sx, oy + 11);
-  // full curve dashed + flown solid
+  // đường cong đầy đủ (nét đứt) + phần đã chạy (nét liền)
   ctx.strokeStyle = '#c7d2fe'; ctx.setLineDash([4, 4]); ctx.beginPath();
   for (let tt = 0; tt <= T; tt += T / 200) ctx.lineTo(ox + tt * sx, oy - fn(tt) * sy);
   ctx.stroke(); ctx.setLineDash([]);
   ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
   for (let tt = 0; tt <= t; tt += T / 400) ctx.lineTo(ox + tt * sx, oy - fn(tt) * sy);
   ctx.stroke();
-  // marker
+  // điểm đánh dấu
   ctx.fillStyle = color;
   ctx.beginPath(); ctx.arc(ox + t * sx, oy - fn(t) * sy, 5, 0, 7); ctx.fill();
 }
@@ -113,21 +114,21 @@ function draw() {
   plot(ctxV, cvV, P.V * 1.15, vAt, '#4f46e5');
   const pct = (vAt(t) / P.V * 100).toFixed(1);
   status.textContent = t >= tEnd()
-    ? `charged — v_C=${vAt(t).toFixed(1)}V (τ=${tau().toFixed(2)}s)`
+    ? `đã nạp — v_C=${vAt(t).toFixed(1)}V (τ=${tau().toFixed(2)}s)`
     : `t=${t.toFixed(2)}s  v_C=${vAt(t).toFixed(2)}V (${pct}%)  i=${iAt(t).toFixed(2)}A  τ=${tau().toFixed(2)}s`;
 }
 
 function frame(ts) {
   if (!playing) return;
   const dt = Math.min((ts - last) / 1000, 0.05); last = ts;
-  t += dt * tau() / 2; // scale playback to τ so it never drags
+  t += dt * tau() / 2; // co giãn thời gian phát theo τ để không bị kéo lê
   if (t >= tEnd()) { t = tEnd(); playing = false;
-    document.getElementById('play').textContent = 'Charge'; }
+    document.getElementById('play').textContent = 'Nạp'; }
   draw();
   if (playing) raf = requestAnimationFrame(frame);
 }
 function reset() { playing = false; cancelAnimationFrame(raf); t = 0;
-  document.getElementById('play').textContent = 'Charge'; draw(); }
+  document.getElementById('play').textContent = 'Nạp'; draw(); }
 function resize() {
   document.querySelectorAll('.half').forEach((el, idx) => {
     const r = el.getBoundingClientRect();
@@ -138,10 +139,10 @@ function resize() {
 }
 
 document.getElementById('play').onclick = () => {
-  if (playing) { playing = false; document.getElementById('play').textContent = 'Charge'; return; }
+  if (playing) { playing = false; document.getElementById('play').textContent = 'Nạp'; return; }
   if (t >= tEnd()) t = 0;
   playing = true; last = performance.now();
-  document.getElementById('play').textContent = 'Pause';
+  document.getElementById('play').textContent = 'Tạm dừng';
   raf = requestAnimationFrame(frame);
 };
 document.getElementById('reset').onclick = reset;

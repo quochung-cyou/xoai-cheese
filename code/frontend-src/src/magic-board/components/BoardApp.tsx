@@ -91,15 +91,16 @@ interface RawScene {
 }
 
 /**
- * The Magic Board — the whole app.
+ * Bảng Ma Thuật — toàn bộ ứng dụng.
  *
- * Sketch on the canvas, hit Analyze (or the hotkey), and the model reads the
- * drawing and drops an interactive simulation or an editable diagram back
- * onto the board, tied to its source sketch by a connector arrow. Select any
- * generated artifact and refine it in words in the right-hand panel.
+ * Vẽ phác thảo lên bảng, bấm Phân tích (hoặc dùng phím nóng), mô hình sẽ đọc
+ * bản vẽ rồi đặt một mô phỏng tương tác hoặc một sơ đồ chỉnh sửa được trở lại
+ * bảng, nối với bản phác thảo nguồn bằng một mũi tên. Chọn bất kỳ kết quả nào
+ * đã tạo và tinh chỉnh nó bằng lời ở bảng bên phải.
  *
- * Boards and every generated output persist in localStorage, so outputs can
- * be re-spawned — individually or all at once — onto any board.
+ * Các bảng và mọi kết quả đã tạo đều được lưu trong localStorage, nên có thể
+ * đặt lại kết quả lên bảng — từng cái một hoặc tất cả cùng lúc — trên bất kỳ
+ * bảng nào.
  */
 export default function BoardApp() {
   const [board, setBoard] = useState<Board>(() => loadOrCreateActiveBoard());
@@ -108,7 +109,9 @@ export default function BoardApp() {
     listCachedOutputs(),
   );
   const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  // Show the visual catalog immediately; after it is closed the floating
+  // "Thêm nội dung" button remains as the persistent way back in.
+  const [pickerOpen, setPickerOpen] = useState(true);
   const [status, setStatus] = useState<AnalyzeStatus>('idle');
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -122,7 +125,7 @@ export default function BoardApp() {
   );
   const [chat, setChat] = useState<ChatMessage[]>(board.chat_messages ?? []);
 
-  // Latest live state for the autosave payload + artifact bookkeeping.
+  // Trạng thái trực tiếp mới nhất cho gói dữ liệu tự động lưu + sổ sách kết quả.
   const sceneRef = useRef<RawScene | null>(null);
   const excalApiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const chatRef = useRef<ChatMessage[]>(chat);
@@ -133,11 +136,11 @@ export default function BoardApp() {
   const cfgRef = useRef<LLMConfig>(llmCfg);
   cfgRef.current = llmCfg;
 
-  /** Artifacts whose generated elements were deleted from the canvas — the
-   *  payload survives (refine still works), it just renders nowhere. */
+  /** Những kết quả mà các phần tử đã tạo của chúng bị xóa khỏi bảng vẽ — phần
+   *  dữ liệu vẫn còn (tinh chỉnh vẫn chạy được), chỉ là không hiển thị ở đâu. */
   const [detachedIds, setDetachedIds] = useState<ReadonlySet<string>>(new Set());
 
-  /** Board whose cached outputs the canvas has already restored. */
+  /** Bảng mà bảng vẽ đã khôi phục xong các kết quả đã lưu tạm. */
   const restoredForRef = useRef<string | null>(null);
 
   const setArtifactsState = (a: Artifact[]) => {
@@ -154,8 +157,8 @@ export default function BoardApp() {
 
   const getPayload = useCallback((): BoardPayload => {
     const raw = sceneRef.current;
-    // No snapshot yet = canvas still mounting — omit `scene` so autosave
-    // can't overwrite the stored scene with {} during the gap.
+    // Chưa có ảnh chụp = bảng vẽ còn đang gắn — bỏ qua `scene` để tự động lưu
+    // không ghi đè cảnh đã lưu bằng {} trong khoảng trống đó.
     if (raw === null) {
       return {
         chat_messages: chatRef.current,
@@ -187,25 +190,25 @@ export default function BoardApp() {
     setBoard,
   );
 
-  // Point the autosave layer at the loaded board once.
+  // Trỏ tầng tự động lưu vào bảng đã tải, một lần duy nhất.
   useEffect(() => {
     adopt(board);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Refresh the switcher list + cache panel from storage. */
+  /** Nạp lại danh sách cho bộ chuyển bảng + bảng kết quả đã lưu từ bộ nhớ. */
   const refreshLists = useCallback(() => {
     setBoardList(listBoards());
     setCachedOutputs(listCachedOutputs());
   }, []);
 
-  // ---------------------------------------------------------------- boards
+  // ---------------------------------------------------------------- bảng
 
-  /** Load a board into every piece of live state. */
+  /** Nạp một bảng vào mọi mảnh trạng thái trực tiếp. */
   const applyBoard = useCallback(
     (next: Board) => {
       dropPending();
-      sceneRef.current = null; // repopulated by the remounted canvas
+      sceneRef.current = null; // bảng vẽ được gắn lại sẽ tự nạp lại
       restoredForRef.current = null;
       setActiveBoardId(next.id);
       adopt(next);
@@ -227,11 +230,11 @@ export default function BoardApp() {
   const selectBoard = useCallback(
     (id: string) => {
       if (id === boardRef.current.id) return;
-      // Persist the outgoing board first, then hand over.
+      // Lưu bảng đang mở trước, rồi mới bàn giao.
       flushNow();
       const next = readBoard(id);
       if (!next) {
-        setAnalyzeError('That board could not be loaded — it may have been deleted.');
+        setAnalyzeError('Không mở được bảng đó — có thể bảng đã bị xóa.');
         return;
       }
       applyBoard(next);
@@ -241,7 +244,7 @@ export default function BoardApp() {
 
   const handleCreateBoard = useCallback(() => {
     flushNow();
-    const created = createBoardRecord(`Board ${listBoards().length + 1}`);
+    const created = createBoardRecord(`Bảng ${listBoards().length + 1}`);
     applyBoard(created);
   }, [flushNow, applyBoard]);
 
@@ -272,8 +275,8 @@ export default function BoardApp() {
       deleteBoardRecord(id);
       refreshLists();
       if (id !== boardRef.current.id) return;
-      // The active board went away — open whatever is left, or make one.
-      const nextId = remaining[0]?.id ?? createBoardRecord('My board').id;
+      // Bảng đang mở đã bị xóa — mở bảng còn lại, hoặc tạo bảng mới.
+      const nextId = remaining[0]?.id ?? createBoardRecord('Bảng của tôi').id;
       const next = readBoard(nextId);
       if (next) applyBoard(next);
       refreshLists();
@@ -281,9 +284,9 @@ export default function BoardApp() {
     [applyBoard, refreshLists],
   );
 
-  // ------------------------------------------------------------- placement
+  // ------------------------------------------------------------- vị trí đặt
 
-  /** Canvas rectangles currently occupied by any live element. */
+  /** Các hình chữ nhật trên bảng vẽ hiện đang bị phần tử nào đó chiếm. */
   const occupiedRects = useCallback(
     (elements: readonly ExcalidrawElement[]): Rect[] =>
       elements
@@ -292,8 +295,8 @@ export default function BoardApp() {
     [],
   );
 
-  /** Anchor for a spawn with no source sketch: the top-left of whatever is
-   *  already on the board (so the result is always in view). */
+  /** Điểm neo cho lần đặt không có bản phác thảo nguồn: góc trên bên trái của
+   *  những gì đã có trên bảng (để kết quả luôn nằm trong tầm nhìn). */
   const anchorRect = useCallback(
     (elements: readonly ExcalidrawElement[]): { x: number; y: number } => {
       const b = boundsOf(elements.filter((el) => !el.isDeleted));
@@ -303,28 +306,29 @@ export default function BoardApp() {
   );
 
   /**
-   * Spawn one artifact onto the current canvas. Returns the rect it occupied
-   * so a batch can pack the next one beside it.
+   * Đặt một kết quả lên bảng vẽ hiện tại. Trả về hình chữ nhật nó chiếm để một
+   * lô có thể xếp cái tiếp theo bên cạnh.
    *
-   * Used by every insert path: the item picker (catalog + previous results),
-   * "spawn cached", and the restore pass. `cacheKey` lets the analyze path key
-   * its cache row by the sketch hash, so two different sketches that happen to
-   * render the same document still keep their own analysis text.
+   * Dùng cho mọi đường chèn: bảng chọn vật thể (danh mục + kết quả đã tạo),
+   * "đặt kết quả đã lưu", và lượt khôi phục. `cacheKey` cho phép đường phân
+   * tích khóa dòng bộ nhớ tạm của nó theo hash bản phác thảo, nhờ vậy hai bản
+   * phác thảo khác nhau mà tình cờ cho ra cùng một tài liệu vẫn giữ được phần
+   * phân tích riêng của mình.
    */
   const spawnArtifactOnBoard = useCallback(
     (
       artifact: Artifact,
       sourceBounds: Rect | null,
       force = false,
-      /** Row that already exists in the output cache, when the caller has one. */
+      /** Dòng đã tồn tại trong bộ nhớ tạm kết quả, khi bên gọi có sẵn. */
       existingEntryId?: string,
-      /** Cache key for a new row — the analyze path passes its sketch hash. */
+      /** Khóa bộ nhớ tạm cho dòng mới — đường phân tích truyền hash bản phác thảo. */
       cacheKey?: string,
     ): { rect: Rect; artifact: Artifact; cachedEntryId: string } | null => {
       const api = excalApiRef.current;
       if (!api) return null;
       if (!force && artifactElements(api.getSceneElements(), artifact.id).length) {
-        return null; // already on this board
+        return null; // đã có trên bảng này rồi
       }
       const existing = api.getSceneElements();
       const rect = findFreeRect(
@@ -341,13 +345,13 @@ export default function BoardApp() {
         captureUpdate: CaptureUpdateAction.NEVER,
       });
 
-      // Register the artifact so refine can target it.
+      // Đăng ký kết quả để phần tinh chỉnh nhắm tới được nó.
       if (!artifactsRef.current.some((a) => a.id === artifact.id)) {
         setArtifactsState([...artifactsRef.current, artifact]);
       }
 
-      // Cache it and remember the link so a reopened board can restore its
-      // outputs. The cache row is shared by every spawn of the same content.
+      // Lưu tạm và ghi nhớ liên kết để bảng mở lại khôi phục được kết quả của
+      // nó. Dòng bộ nhớ tạm được dùng chung cho mọi lần đặt cùng nội dung.
       const entry =
         existingEntryId !== undefined
           ? { id: existingEntryId }
@@ -363,7 +367,7 @@ export default function BoardApp() {
     [occupiedRects, anchorRect],
   );
 
-  /** Spawn a cached output, reusing its existing cache row. */
+  /** Đặt một kết quả đã lưu tạm, dùng lại đúng dòng bộ nhớ tạm của nó. */
   const spawnCachedOutput = useCallback(
     (entry: CachedOutput, force = false) =>
       spawnArtifactOnBoard(
@@ -377,8 +381,8 @@ export default function BoardApp() {
   );
 
   /**
-   * Spawn a catalog item: render its template and drop it straight onto the
-   * canvas with the item's default params. No model call — this is instant.
+   * Đặt một vật thể trong danh mục: dựng template của nó rồi thả thẳng lên
+   * bảng vẽ với tham số mặc định của vật thể. Không gọi mô hình — tức thì.
    */
   const handleSpawnCatalogItem = useCallback(
     async (item: CatalogItem) => {
@@ -386,10 +390,9 @@ export default function BoardApp() {
       const artifact = scenarioArtifact(inst);
       setSpawnBusy(true);
       try {
-        // force: picking the same item twice is a deliberate request for
-        // another copy.
+        // force: chọn cùng một vật thể hai lần là chủ ý muốn thêm một bản nữa.
         const placed = spawnArtifactOnBoard(artifact, null, true);
-        if (!placed) throw new Error('The canvas is still loading — try again.');
+        if (!placed) throw new Error('Bảng vẽ vẫn đang tải — hãy thử lại.');
         setAnalyzeError(null);
         setCachedOutputs(listCachedOutputs());
         markDirty();
@@ -405,7 +408,7 @@ export default function BoardApp() {
       setSpawnBusy(true);
       try {
         const placed = spawnCachedOutput(entry, true);
-        if (!placed) throw new Error('The canvas is still loading — try again.');
+        if (!placed) throw new Error('Bảng vẽ vẫn đang tải — hãy thử lại.');
         setAnalyzeError(null);
         setCachedOutputs(listCachedOutputs());
         markDirty();
@@ -421,7 +424,7 @@ export default function BoardApp() {
       setSpawnBusy(true);
       try {
         const onBoard = new Set(artifactsRef.current.map((a) => a.id));
-        // Board order first (the cache it was built from), then anything new.
+        // Thứ tự theo bảng trước (bộ nhớ tạm đã dựng nên nó), rồi tới cái mới.
         const byId = new Map(cachedOutputs.map((c) => [c.id, c]));
         const ordered: CachedOutput[] = [
           ...cacheKeysRef.current
@@ -447,8 +450,8 @@ export default function BoardApp() {
         if (spawned === 0) {
           setAnalyzeError(
             options.includeCopies
-              ? 'Nothing to spawn — there are no generated results yet.'
-              : 'Every generated result is already on this board.',
+              ? 'Không có gì để đặt lên — chưa có kết quả nào được tạo.'
+              : 'Mọi kết quả đã tạo đều đã có trên bảng này.',
           );
         } else {
           setAnalyzeError(null);
@@ -477,10 +480,10 @@ export default function BoardApp() {
     markDirty();
   }, [markDirty]);
 
-  // ------------------------------------------------------ live analyze path
+  // ----------------------------------------------- đường phân tích trực tiếp
 
-  /** Where the next live-analyzed artifact lands: first-fit nearest free
-   *  slot, anchored to the analyzed sketch. */
+  /** Nơi kết quả phân tích trực tiếp tiếp theo hạ xuống: ô trống gần nhất theo
+   *  kiểu first-fit, neo vào bản phác thảo vừa phân tích. */
   const artifactRect = useCallback(
     (snapshot: Snapshot, aspect: number) => {
       const api = excalApiRef.current;
@@ -499,7 +502,7 @@ export default function BoardApp() {
     [occupiedRects, anchorRect],
   );
 
-  /** Draw-in animation for a connector arrow (~500ms, ease-out cubic). */
+  /** Hoạt họa vẽ dần cho mũi tên nối (~500ms, ease-out cubic). */
   const animateArrowIn = useCallback((arrowId: string) => {
     const t0 = performance.now();
     const tick = () => {
@@ -515,8 +518,8 @@ export default function BoardApp() {
     requestAnimationFrame(tick);
   }, []);
 
-  /** Analyze just fired: drop the loading placeholder on the slot the result
-   *  will occupy, plus a bound arrow from the analyzed sketch down into it. */
+  /** Phân tích vừa chạy: đặt phần giữ chỗ đang tải vào đúng ô mà kết quả sẽ
+   *  chiếm, kèm một mũi tên nối từ bản phác thảo đã phân tích xuống đó. */
   const spawnPendingArtifact = useCallback(
     (snapshot: Snapshot) => {
       const api = excalApiRef.current;
@@ -552,12 +555,12 @@ export default function BoardApp() {
   );
 
   /**
-   * Record a freshly analyzed artifact in the output cache and on this board's
-   * cache-link list. Returns the cache row id.
+   * Ghi một kết quả vừa phân tích vào bộ nhớ tạm kết quả và vào danh sách
+   * liên kết bộ nhớ tạm của bảng này. Trả về id dòng bộ nhớ tạm.
    *
-   * Kept separate from `spawnArtifactOnBoard` because the analyze path draws
-   * its own elements (placeholder promotion, arrows) and only needs the
-   * bookkeeping — `spawnArtifactOnBoard` would bail on the duplicate check.
+   * Tách riêng khỏi `spawnArtifactOnBoard` vì đường phân tích tự vẽ các phần tử
+   * của nó (thăng cấp phần giữ chỗ, mũi tên) và chỉ cần phần ghi sổ —
+   * `spawnArtifactOnBoard` sẽ dừng lại ở bước kiểm tra trùng.
    */
   const linkFreshArtifact = useCallback(
     (artifact: Artifact, sourceBounds: Rect | null, cacheKey: string): string => {
@@ -592,8 +595,8 @@ export default function BoardApp() {
           : [];
 
       if (api && pendingId && pending.length && artifact.kind !== 'elements') {
-        // Promote the placeholder in place — the user may have moved it, so the
-        // element is already drawn and only the bookkeeping is left.
+        // Thăng cấp phần giữ chỗ ngay tại chỗ — người dùng có thể đã di chuyển
+        // nó, nên phần tử đã được vẽ sẵn và chỉ còn phần ghi sổ.
         api.updateScene({
           elements: promotePendingArtifact(
             api.getSceneElements(),
@@ -605,8 +608,9 @@ export default function BoardApp() {
         });
         linkFreshArtifact(artifact, sourceBounds, sketchHash);
       } else if (api && pendingId && pending.length) {
-        // Diagram artifact: reuse the placeholder's rect; the pending iframe
-        // and its arrow are swept, then a fresh arrow points at the skeleton.
+        // Kết quả dạng sơ đồ: dùng lại hình chữ nhật của phần giữ chỗ; iframe
+        // đang chờ và mũi tên của nó bị dọn đi, rồi một mũi tên mới trỏ vào
+        // bộ khung.
         const pendingRect = boundsOf(pending);
         const rect = pendingRect ?? artifactRect(snapshot, aspectFor('elements'));
         const cleared = markPendingArtifactsDeleted(api.getSceneElements(), pendingId);
@@ -635,7 +639,8 @@ export default function BoardApp() {
           if (arrow) animateArrowIn(arrow.id);
           linkFreshArtifact(artifact, sourceBounds, sketchHash);
         } else {
-          // No rect to reuse — fall back to a plain place-and-register.
+          // Không có hình chữ nhật để dùng lại — quay về cách đặt và đăng ký
+          // thông thường.
           api.updateScene({
             elements: markPendingArtifactsDeleted(api.getSceneElements(), pendingId),
             captureUpdate: CaptureUpdateAction.NEVER,
@@ -643,8 +648,8 @@ export default function BoardApp() {
           spawnArtifactOnBoard(artifact, sourceBounds, true, undefined, sketchHash);
         }
       } else {
-        // No placeholder (analyze raced the sweep, or a batch run): let the
-        // shared insert path draw and register it.
+        // Không có phần giữ chỗ (phân tích chạy nhanh hơn bước dọn, hoặc chạy
+        // theo lô): để đường chèn dùng chung vẽ và đăng ký nó.
         spawnArtifactOnBoard(artifact, sourceBounds, true, undefined, sketchHash);
       }
 
@@ -655,7 +660,8 @@ export default function BoardApp() {
     [artifactRect, spawnArtifactOnBoard, linkFreshArtifact, markDirty],
   );
 
-  // Sweep placeholders whose runs ended without promotion (error, abort).
+  // Dọn những phần giữ chỗ mà lượt chạy của chúng kết thúc mà không được thăng
+  // cấp (lỗi, bị hủy).
   useEffect(() => {
     if (status === 'analyzing') return;
     const api = excalApiRef.current;
@@ -668,10 +674,10 @@ export default function BoardApp() {
     });
   }, [status]);
 
-  /* iframe ↔ host state bridge: artifact iframes run sandboxed on an opaque
-   *  origin (no localStorage), so they report state over postMessage. 'ready'
-   *  gets a reply with the saved state; 'state' writes it onto the element's
-   *  customData — autosaved with the scene. */
+  /* Cầu nối trạng thái iframe ↔ ứng dụng: các iframe kết quả chạy trong sandbox
+   *  trên một origin đục (không có localStorage), nên chúng báo trạng thái qua
+   *  postMessage. 'ready' nhận lại trạng thái đã lưu; 'state' ghi nó vào
+   *  customData của phần tử — được tự động lưu cùng cảnh. */
   useEffect(() => {
     const onMsg = (ev: MessageEvent) => {
       const d = ev.data as {
@@ -694,8 +700,8 @@ export default function BoardApp() {
       if (d.type === 'ready') {
         const saved = (match?.customData as Record<string, unknown> | undefined)?.state;
         if (ev.source) {
-          // boardBg first — sims repaint their opaque doc bg to match the
-          // canvas (sandboxed iframes can't be transparent).
+          // boardBg trước tiên — các mô phỏng tô lại nền tài liệu đục của chúng
+          // cho khớp với bảng vẽ (iframe trong sandbox không thể trong suốt).
           (ev.source as Window).postMessage(
             {
               source: 'magic-board',
@@ -714,7 +720,7 @@ export default function BoardApp() {
         return;
       }
       if (d.type === 'state' && d.state && match) {
-        // updateScene fires onChange -> markDirty -> autosave persists it.
+        // updateScene phát onChange -> markDirty -> tự động lưu ghi xuống.
         api.updateScene({
           elements: setIframeState(scene.elements, d.artifactId, d.state),
           captureUpdate: CaptureUpdateAction.NEVER,
@@ -737,9 +743,8 @@ export default function BoardApp() {
     (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
       sceneRef.current = { elements, appState, files };
 
-      // Selection-driven refine target: picking a generated element (or a
-      // duplicated copy — artifactId travels with customData) targets its
-      // artifact.
+      // Nhắm mục tiêu tinh chỉnh theo lựa chọn: chọn một phần tử đã tạo (hoặc
+      // một bản sao — artifactId đi kèm customData) là nhắm vào kết quả của nó.
       const selected = elements.filter((el) => appState.selectedElementIds[el.id]);
       const gen = selected.find((el) => artifactIdOf(el));
       if (gen) {
@@ -756,7 +761,7 @@ export default function BoardApp() {
             .map((a) => a.id),
         );
         if (prev.size === next.size && [...prev].every((id) => next.has(id))) {
-          return prev; // identical -> bail out, no re-render
+          return prev; // giống hệt -> thoát, không render lại
         }
         return next;
       });
@@ -768,9 +773,9 @@ export default function BoardApp() {
   );
 
   /**
-   * Canvas ready — fires on initial mount and after every board switch (the
-   * canvas remounts on board id). Seeds staleness, then re-spawns this
-   * board's cached outputs if its scene does not already show them.
+   * Bảng vẽ sẵn sàng — chạy khi gắn lần đầu và sau mỗi lần chuyển bảng (bảng vẽ
+   * được gắn lại theo id bảng). Nạp mốc so sánh độ cũ, rồi đặt lại các kết quả
+   * đã lưu tạm của bảng này nếu cảnh của nó chưa hiển thị chúng.
    */
   const handleApi = useCallback(
     (api: ExcalidrawImperativeAPI) => {
@@ -786,7 +791,7 @@ export default function BoardApp() {
 
       const keys = cacheKeysRef.current;
       if (!keys.length) return;
-      // The saved scene already holds the generated elements.
+      // Cảnh đã lưu đã chứa sẵn các phần tử được tạo.
       if (artifactsRef.current.length > 0 && els.length > 0) return;
 
       const byId = new Map(listCachedOutputs().map((c) => [c.id, c]));
@@ -828,9 +833,9 @@ export default function BoardApp() {
     [seedHashes, occupiedRects, anchorRect, markDirty],
   );
 
-  /** Manual "analyze area": the user's element selection defines the area — a
-   *  frame element alone means its contents; no selection means the whole
-   *  board. Force-fired. */
+  /** "Phân tích vùng" thủ công: lựa chọn phần tử của người dùng quyết định
+   *  vùng — chỉ một phần tử khung thì nghĩa là nội dung của khung đó; không
+   *  chọn gì thì nghĩa là cả bảng. Luôn kích hoạt cưỡng bức. */
   const handleAnalyzeNow = useCallback(() => {
     const api = excalApiRef.current;
     if (!api) return;
@@ -863,18 +868,18 @@ export default function BoardApp() {
     } else {
       snapshot = { elements, appState, files };
     }
-    // Unique run id — the pending placeholder and its result meet again
-    // through it even when several analyses run in parallel.
+    // Id lượt chạy duy nhất — phần giữ chỗ đang chờ và kết quả của nó gặp lại
+    // nhau qua id này kể cả khi nhiều lượt phân tích chạy song song.
     snapshot = { ...snapshot, runId: crypto.randomUUID().slice(0, 8) };
     spawnPendingArtifact(snapshot);
     analyzeNow(snapshot);
   }, [analyzeNow, spawnPendingArtifact]);
 
-  // Keep a stable ref to the handler so the key listener never goes stale.
+  // Giữ một ref ổn định tới handler để bộ lắng nghe bàn phím không bao giờ cũ.
   const analyzeNowRef = useRef(handleAnalyzeNow);
   analyzeNowRef.current = handleAnalyzeNow;
 
-  // Global hotkey: analyze on keypress anywhere outside text inputs.
+  // Phím nóng toàn cục: phân tích khi bấm phím ở bất kỳ đâu ngoài ô nhập liệu.
   useEffect(() => {
     const target = hotkey.length === 1 ? hotkey.toLowerCase() : hotkey;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -896,7 +901,7 @@ export default function BoardApp() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [hotkey]);
 
-  /** Refine done: reflect the new payload on the canvas AND in the cache. */
+  /** Tinh chỉnh xong: phản ánh dữ liệu mới lên bảng vẽ VÀ trong bộ nhớ tạm. */
   const handleArtifactPayload = useCallback(
     (artifactId: string, payload: Artifact['payload']) => {
       const updated = artifactsRef.current.map((a) =>
@@ -904,7 +909,8 @@ export default function BoardApp() {
           ? {
               ...a,
               payload,
-              // A scenario refinement re-derives these, so take them along.
+              // Một lần tinh chỉnh kịch bản sẽ tính lại những thứ này, nên mang
+              // chúng theo luôn.
               ...(payload.title ? { title: payload.title } : {}),
               ...(payload.analysis !== undefined ? { analysis: payload.analysis } : {}),
             }
@@ -912,7 +918,7 @@ export default function BoardApp() {
       );
       setArtifactsState(updated);
 
-      // Keep the cached copy in step, or a re-spawn would ship the old sim.
+      // Giữ bản lưu tạm khớp theo, nếu không lần đặt lại sẽ đưa ra mô phỏng cũ.
       const entry = listCachedOutputs().find((c) => c.artifact.id === artifactId);
       if (entry) {
         updateCachedArtifact(entry.id, payload);
@@ -932,7 +938,7 @@ export default function BoardApp() {
           captureUpdate: CaptureUpdateAction.NEVER,
         });
       } else if (payload.elements) {
-        // Rebuild the whole generated group at its current bounds.
+        // Dựng lại cả nhóm đã tạo tại đúng biên hiện tại của nó.
         const oldEls = artifactElements(scene, artifactId);
         const rect =
           boundsOf(oldEls) ??
@@ -966,7 +972,7 @@ export default function BoardApp() {
   const configured = Boolean(llmCfg.api_key.trim() && llmCfg.model.trim());
 
   const cacheSize = useMemo(() => {
-    void cachedOutputs; // recompute whenever the cache changes
+    void cachedOutputs; // tính lại mỗi khi bộ nhớ tạm thay đổi
     return cacheByteSize();
   }, [cachedOutputs]);
 
@@ -993,10 +999,10 @@ export default function BoardApp() {
             <button
               onClick={cancel}
               className="flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1.5 text-[11px] font-medium text-background hover:bg-foreground/85"
-              title="Cancel the running analysis"
+              title="Hủy lượt phân tích đang chạy"
             >
               <Square size={11} className="fill-current" />
-              Stop
+              Dừng
             </button>
           ) : (
             <button
@@ -1006,10 +1012,10 @@ export default function BoardApp() {
                   ? 'animate-pulse bg-primary text-primary-foreground'
                   : 'bg-primary/10 text-primary hover:bg-primary/20'
               }`}
-              title={`Analyze the board (${hotkey}) — uses your selection if any, otherwise everything`}
+              title={`Phân tích bảng (${hotkey}) — dùng phần bạn đang chọn nếu có, nếu không thì phân tích toàn bộ`}
             >
               <ScanLine size={12} />
-              Analyze
+              Phân tích
             </button>
           )}
           <button
@@ -1019,18 +1025,18 @@ export default function BoardApp() {
                 ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 : 'bg-amber-500/15 text-amber-600'
             }`}
-            title="Model settings"
+            title="Cài đặt mô hình"
           >
             <Settings2 size={13} />
             <span className="hidden font-mono text-[10px] md:inline">
-              {configured ? modelLabel(llmCfg) : 'set up model'}
+              {configured ? modelLabel(llmCfg) : 'thiết lập mô hình'}
             </span>
           </button>
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* Canvas */}
+        {/* Bảng vẽ */}
         <div className="relative min-w-0 flex-1">
           <BoardCanvas
             key={board.id}
@@ -1039,22 +1045,22 @@ export default function BoardApp() {
             onApi={handleApi}
           />
 
-          {/* Status overlay */}
+          {/* Lớp phủ trạng thái */}
           <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
             {status === 'analyzing' && (
               <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg">
-                <Loader2 size={12} className="animate-spin" /> Reading your sketch…
+                <Loader2 size={12} className="animate-spin" /> Đang đọc bản phác thảo…
               </div>
             )}
             {status === 'suggested' && (
               <button
                 onClick={handleAnalyzeNow}
                 className="pointer-events-auto flex items-center gap-2 rounded-full bg-foreground px-3 py-1.5 text-xs font-medium text-background shadow-lg hover:bg-foreground/85"
-                title="The board changed since the last analysis"
+                title="Bảng đã thay đổi kể từ lần phân tích trước"
               >
-                <ScanLine size={12} /> Board changed — press{' '}
+                <ScanLine size={12} /> Bảng đã thay đổi — nhấn{' '}
                 <kbd className="rounded bg-white/20 px-1 font-mono text-[10px]">{hotkey}</kbd>{' '}
-                or click to analyze
+                hoặc bấm để phân tích
               </button>
             )}
             {status === 'error' && analyzeError && (
@@ -1063,7 +1069,7 @@ export default function BoardApp() {
                 <button
                   onClick={() => setAnalyzeError(null)}
                   className="shrink-0 font-semibold opacity-70 hover:opacity-100"
-                  title="Dismiss"
+                  title="Bỏ qua"
                 >
                   ×
                 </button>
@@ -1071,38 +1077,41 @@ export default function BoardApp() {
             )}
           </div>
 
-          {/* Floating add button — the item picker. Sits clear of the
-              bottom-centre status pill. */}
-          <button
-            onClick={() => setPickerOpen(true)}
-            disabled={spawnBusy}
-            className="absolute bottom-4 right-4 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
-            title="Add an item — 3D shapes, anatomy, equations, physics…"
-          >
-            {spawnBusy ? (
-              <Loader2 size={20} className="animate-spin" />
-            ) : (
-              <Plus size={22} />
-            )}
-          </button>
+          {/* Nút thêm nổi — bảng chọn vật thể. Nằm tránh viên trạng thái ở
+              giữa phía dưới. */}
+          {!pickerOpen && (
+            <button
+              onClick={() => setPickerOpen(true)}
+              disabled={spawnBusy}
+              className="group absolute bottom-4 right-4 z-20 flex h-12 items-center gap-2 rounded-full bg-primary px-3.5 text-primary-foreground shadow-xl transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
+              title="Thêm một mục — hình khối 3D, giải phẫu, phương trình, vật lý…"
+            >
+              {spawnBusy ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <Plus size={20} />
+              )}
+              <span className="text-xs font-semibold">Thêm nội dung</span>
+            </button>
+          )}
 
-          {/* First-run hint */}
+          {/* Gợi ý lần đầu sử dụng */}
           {artifacts.length === 0 && status === 'idle' && cachedOutputs.length === 0 && (
             <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full border border-border bg-card/90 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
-              Draw a sketch and hit Analyze — or press{' '}
-              <span className="font-semibold text-foreground">+</span> for 3D shapes and anatomy
+              Hãy vẽ một bản phác thảo rồi bấm Phân tích — hoặc nhấn{' '}
+              <span className="font-semibold text-foreground">+</span> để lấy hình khối 3D và giải phẫu
             </div>
           )}
         </div>
 
-        {/* Right panel — the refine chat. Generated output lives on the canvas
-            itself as iframe/element artifacts. */}
+        {/* Bảng bên phải — phần trò chuyện tinh chỉnh. Kết quả đã tạo nằm ngay
+            trên bảng vẽ dưới dạng iframe/phần tử. */}
         {panelCollapsed ? (
           <div className="m-2 flex w-10 shrink-0 flex-col items-center gap-1 self-start rounded-2xl border border-border bg-card py-2 shadow-sm">
             <button
               onClick={() => setPanelCollapsed(false)}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              title="Show refine panel"
+              title="Hiện bảng tinh chỉnh"
             >
               <PanelRightOpen size={14} />
             </button>
@@ -1110,11 +1119,11 @@ export default function BoardApp() {
         ) : (
           <div className="m-2 flex w-[400px] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
             <div className="flex h-10 items-center gap-2 border-b border-border px-3.5">
-              <span className="text-xs font-semibold">Refine</span>
+              <span className="text-xs font-semibold">Tinh chỉnh</span>
               <button
                 onClick={() => setPanelCollapsed(true)}
                 className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                title="Collapse panel"
+                title="Thu gọn bảng điều khiển"
               >
                 <PanelRightClose size={13} />
               </button>
@@ -1123,7 +1132,7 @@ export default function BoardApp() {
             <div className="flex min-h-0 flex-1 flex-col">
               <ChatPanel
                 getConfig={() => cfgRef.current}
-                modelLabel={configured ? modelLabel(llmCfg) : 'not configured'}
+                modelLabel={configured ? modelLabel(llmCfg) : 'chưa cấu hình'}
                 artifacts={artifacts}
                 activeArtifactId={activeArtifactId}
                 onOpenSettings={() => setSettingsOpen(true)}

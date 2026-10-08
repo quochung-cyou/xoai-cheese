@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head><script>
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Yêu cầu thất bại';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sách lật trang</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden;
+               font-family: ui-sans-serif, system-ui, sans-serif;
+               background: #f2f3f3; }
+  #book { position: absolute; inset: 4px; }
+  .pg { width: 100%; height: 100%; background: #fff;
+        box-shadow: 0 0 0 1px rgba(15,23,42,.10); }
+  .pg img { width: 100%; height: 100%; object-fit: fill; display: block;
+            opacity: 0; transition: opacity .3s; }
+  .pg img.rdy { opacity: 1; }
+  .pg .ph { position: absolute; inset: 0; display: flex;
+            align-items: center; justify-content: center;
+            color: #cbd5e1; font-size: 11px; }
+  #hud { position: absolute; top: 8px; left: 10px; right: 10px;
+         display: flex; justify-content: space-between; align-items: flex-start;
+         pointer-events: none; z-index: 5; }
+  #title { font-size: 12px; font-weight: 600; color: #1e293b;
+           background: rgba(255,255,255,.9); border: 1px solid #e2e8f0;
+           border-radius: 6px; padding: 3px 8px; max-width: 70%;
+           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #status { position: absolute; right: 10px; bottom: 8px; font-size: 10px;
+            color: #64748b; pointer-events: none; z-index: 5;
+            background: rgba(255,255,255,.85); border-radius: 5px;
+            padding: 2px 6px; }
+  .nav { position: absolute; top: 50%; transform: translateY(-50%);
+         z-index: 6; width: 30px; height: 44px; border: 1px solid #e2e8f0;
+         background: rgba(255,255,255,.92); color: #334155; font-size: 16px;
+         cursor: pointer; display: flex; align-items: center;
+         justify-content: center; }
+  .nav:hover { background: #fff; border-color: #94a3b8; }
+  #prev { left: 6px; border-radius: 0 8px 8px 0; }
+  #next { right: 6px; border-radius: 8px 0 0 8px; }
+  #overlay { position: absolute; inset: 0; display: flex; flex-direction: column;
+             align-items: center; justify-content: center; gap: 10px;
+             background: #f2f3f3; transition: opacity .3s; z-index: 9; }
+  #overlay .spin { width: 26px; height: 26px; border: 3px solid #e2e8f0;
+                   border-top-color: #4f46e5; border-radius: 50%;
+                   animation: r 0.9s linear infinite; }
+  #overlay .msg { font-size: 11px; color: #64748b; }
+  #overlay.err .msg { color: #ef4444; max-width: 320px; text-align: center; }
+  @keyframes r { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="book"></div>
+<div id="hud"><div id="title">Sách lật trang</div></div>
+<button id="prev" class="nav" title="Trang trước">&#8249;</button>
+<button id="next" class="nav" title="Trang sau">&#8250;</button>
+<div id="status">đang tải…</div>
+<div id="overlay"><div class="spin"></div><div class="msg">Đang tải sách…</div></div>
+
+<script type="module">
+import { PageFlip } from '/mb-assets/vendor/page-flip/page-flip.module.js';
+import * as pdfjsLib from '/mb-assets/vendor/pdfjs/pdf.min.mjs';
+
+const PARAMS = __PARAMS__;
+const ARTIFACT_ID = window.__MAGIC_BOARD_ARTIFACT_ID__ || null;
+
+/* Cầu nối trạng thái — iframe artifact chạy trên origin mờ (không có
+   localStorage, host không truy cập được DOM), nên trang hiện tại
+   được luân chuyển qua postMessage và lưu trong
+   customData.state của phần tử, gắn cùng cảnh của bảng. */
+const postState = (type, state) => {
+  try {
+    parent.postMessage(
+      { source: 'magic-board', type, artifactId: ARTIFACT_ID, state }, '*');
+  } catch (_) {}
+};
+let pendingState = null;
+let flipReady = false;
+let flip = null;   // thực thể PageFlip — gán trong main()
+let numPages = 0;
+const applyState = () => {
+  if (!pendingState || !flipReady) return;
+  const p = pendingState.page;
+  pendingState = null;
+  if (typeof p === 'number' && p !== flip.getCurrentPageIndex()) {
+    flip.turnToPage(Math.min(numPages - 1, Math.max(0, p)));
+  }
+};
+window.addEventListener('message', (ev) => {
+  const d = ev.data;
+  if (d && d.source === 'magic-board' && d.type === 'state' && d.state) {
+    pendingState = d.state;
+    applyState();
+  }
+});
+
+const statusEl = document.getElementById('status');
+const overlay = document.getElementById('overlay');
+const overlayMsg = overlay.querySelector('.msg');
+
+const fail = (msg) => {
+  overlay.classList.add('err');
+  overlayMsg.textContent = msg;
+  overlay.querySelector('.spin').style.display = 'none';
+};
+const hideOverlay = () => {
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.remove(), 350);
+};
+
+// term -> mục trong danh mục, tương ứng scenarios._resolve_term ở backend
+// (khoá mục -> bí danh -> chuỗi con trong tên; term rỗng -> mục đầu tiên).
+function resolveBook(data, term) {
+  const entries = data.entries || {};
+  const aliases = data.aliases || {};
+  const t = String(term || '').trim().toLowerCase();
+  if (!t) return entries[Object.keys(entries)[0]] || null;
+  const key = t.replace(/\s+/g, '_');
+  if (entries[key]) return entries[key];
+  const spec = aliases[t] || aliases[key];
+  if (typeof spec === 'string' && entries[spec]) return entries[spec];
+  const hits = Object.values(entries).filter(
+    (en) => String(en.name || '').toLowerCase().includes(t));
+  return hits[0] || null;
+}
+
+function pdfPathOf(entry) {
+  // Chấp nhận các cách viết hợp lý; chuỗi không rỗng đầu tiên được chọn.
+  for (const k of ['file', 'path', 'pdf', 'src', 'url']) {
+    const v = entry && entry[k];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  // Phương án cuối: bất kỳ giá trị chuỗi nào trong mục trông giống đường dẫn PDF.
+  for (const v of Object.values(entry || {})) {
+    if (typeof v === 'string' && /\.pdf(\?|$)/i.test(v)) return v;
+  }
+  return '';
+}
+
+async function main() {
+  const data = await (await fetch(`/mb-assets/books/catalog.json`))
+    .json();
+  const entry = resolveBook(data, PARAMS.book);
+  // Nêu đúng vấn đề thay vì để PDF.js báo một lỗi kiểu trần trụi.
+  if (!entry) {
+    const known = Object.keys(data && data.entries ? data.entries : {});
+    fail('Không có mục nào trong danh mục cho "' + String(PARAMS.book) +
+      '". Các khoá danh mục: ' + (known.join(', ') || '(không có)'));
+    return;
+  }
+  const pdfPath = pdfPathOf(entry);
+  if (!pdfPath) {
+    fail('Mục danh mục "' + (entry.name || '?') +
+      '" không có đường dẫn PDF. Các khoá của mục: ' + Object.keys(entry).join(', '));
+    return;
+  }
+  if (!entry || !pdfPathOf(entry)) {
+    fail(`"${PARAMS.book}" không có trong danh mục sách được lưu trữ.`);
+    return;
+  }
+  document.getElementById('title').textContent =
+    entry.name || 'Sách lật trang';
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    `/mb-assets/vendor/pdfjs/pdf.worker.min.mjs`;
+
+  overlayMsg.textContent = 'Đang tải PDF…';
+  const pdfUrl = `/mb-assets/${pdfPath}`;
+  const pdfRes = await fetch(pdfUrl);
+  if (!pdfRes.ok) {
+    fail(pdfUrl + ' -> HTTP ' + pdfRes.status +
+      (pdfRes.status === 404
+        ? ' (thiếu tệp: hãy đặt PDF vào public/mb-assets/books/)'
+        : ''));
+    return;
+  }
+  const pdfBytes = new Uint8Array(await pdfRes.arrayBuffer());
+  const doc = await pdfjsLib.getDocument({
+    data: pdfBytes,
+    cMapUrl: `/mb-assets/vendor/pdfjs/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl:
+      `/mb-assets/vendor/pdfjs/standard_fonts/`,
+  }).promise;
+  numPages = doc.numPages;
+
+  // Tỉ lệ trang (điểm PDF ở tỉ lệ 1) quyết định hình dạng của sách.
+  const first = await doc.getPage(1);
+  const v1 = first.getViewport({ scale: 1 });
+
+  // Mọi khe trang được tạo sẵn để lật sách được ngay;
+  // nguồn <img> được điền dần khi các trang được kết xuất.
+  const items = [];
+  const imgs = [];
+  for (let i = 0; i < numPages; i++) {
+    const d = document.createElement('div');
+    d.className = 'pg';
+    const ph = document.createElement('div');
+    ph.className = 'ph';
+    ph.textContent = String(i + 1);
+    const im = document.createElement('img');
+    im.alt = `trang ${i + 1}`;
+    d.append(ph, im);
+    items.push(d);
+    imgs.push(im);
+  }
+
+  flip = new PageFlip(document.getElementById('book'), {
+    width: v1.width,
+    height: v1.height,
+    size: 'stretch',
+    minWidth: 200,
+    maxWidth: 1600,
+    minHeight: 200,
+    maxHeight: 1600,
+    usePortrait: true,
+    showCover: true,
+    startPage: Math.min(numPages - 1,
+      Math.max(0, (Number(PARAMS.page) || 1) - 1)),
+    flippingTime: 450,
+    drawShadow: true,
+    maxShadowOpacity: 0.35,
+    useMouseEvents: true,
+    showPageCorners: true,
+    swipeDistance: 25,
+    mobileScrollSupport: true,
+    clickEventForward: true,
+    autoSize: true,
+    disableFlipByClick: false,
+  });
+
+  let rendered = 0;
+  const paintStatus = (cur) => {
+    const left = rendered < numPages
+      ? ` · đang kết xuất ${rendered}/${numPages}` : '';
+    statusEl.textContent = `tr ${cur + 1}/${numPages}${left}`;
+  };
+  flip.on('flip', (e) => {
+    paintStatus(e.data);
+    postState('state', { page: e.data });
+  });
+  flip.on('init', () => {
+    flipReady = true;
+    hideOverlay();
+    paintStatus(flip.getCurrentPageIndex());
+    applyState();
+    // Gửi trang đang dừng để sách mở lần đầu seed customData.state.
+    postState('state', { page: flip.getCurrentPageIndex() });
+  });
+  flip.loadFromHTML(items);
+  postState('ready', null);
+
+  document.getElementById('prev').onclick = () => flip.flipPrev();
+  document.getElementById('next').onclick = () => flip.flipNext();
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key === 'ArrowLeft') flip.flipPrev();
+    if (ev.key === 'ArrowRight') flip.flipNext();
+    if (ev.key === 'Home') flip.turnToPage(0);
+    if (ev.key === 'End') flip.turnToPage(numPages - 1);
+  });
+
+  // Kết xuất tuần tự — một canvas, event loop rảnh giữa các trang.
+  const SCALE = 1.4;                    // ~830x1175 cho A4 — nét ở cỡ sách
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  for (let i = 1; i <= numPages; i++) {
+    const page = await doc.getPage(i);
+    const vp = page.getViewport({ scale: SCALE });
+    canvas.width = vp.width;
+    canvas.height = vp.height;
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const im = imgs[i - 1];
+    im.src = canvas.toDataURL('image/jpeg', 0.78);
+    im.classList.add('rdy');
+    page.cleanup();
+    rendered = i;
+    paintStatus(flip.getCurrentPageIndex());
+  }
+  await doc.destroy();
+}
+
+main().catch((err) => fail(err?.message || String(err)));
+</script>
+</body>
+</html>

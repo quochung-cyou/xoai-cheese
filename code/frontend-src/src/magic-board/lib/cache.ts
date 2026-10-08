@@ -1,12 +1,12 @@
 /**
- * Analyze-result cache — "draw → LLM out" results kept so they can be
- * re-spawned onto any board later.
+ * Bộ nhớ tạm (cache) kết quả phân tích — kết quả "vẽ → LLM trả ra" được giữ
+ * lại để có thể tái tạo (spawn) lên bất kỳ bảng nào sau này.
  *
- * Each successful analyze (and each refine that changes a payload) is stored
- * keyed by a hash of the sketch elements it came from. Because the board
- * system is local-only, this is the only durable memory of what the model
- * produced: clear the canvas, switch boards, reload — the outputs are still
- * here and can be re-spawned on demand.
+ * Mỗi lần phân tích thành công (và mỗi lần tinh chỉnh làm thay đổi payload)
+ * đều được lưu với khóa là mã băm của các phần tử bản phác thảo đã sinh ra nó.
+ * Vì hệ thống bảng chỉ hoạt động cục bộ, đây là ký ức bền vững duy nhất về
+ * những gì mô hình đã tạo ra: xóa bảng vẽ, đổi bảng, tải lại — kết quả vẫn còn
+ * ở đây và có thể tái tạo theo yêu cầu.
  */
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 
@@ -18,13 +18,15 @@ const ENTRY_PREFIX = `${CACHE_SLUG}.cache.`;
 
 export interface CachedOutput {
   id: string;
-  /** Hash of the sketch this came from — lets a redraw of the same sketch
-   *  reuse the cached result instead of calling the model again. */
+  /** Mã băm (hash) của bản phác thảo đã sinh ra kết quả này — cho phép vẽ lại
+   *  cùng bản phác thảo thì dùng lại kết quả trong bộ nhớ tạm thay vì gọi mô
+   *  hình lần nữa. */
   hash: string;
   artifact: Artifact;
-  /** Bounds of the source sketch, so a spawn can land near it. */
+  /** Khoảng bao (bounds) của bản phác thảo nguồn, để bước tái tạo đặt kết quả
+   *  gần nó. */
   sourceBounds: Rect | null;
-  /** Last time this entry was spawned onto a board. */
+  /** Lần cuối mục này được tái tạo lên một bảng. */
   spawnedAt?: string;
 }
 
@@ -37,9 +39,10 @@ interface CacheEntry {
   created_at: string;
 }
 
-/** Stable content hash of an artifact — used as the cache key for anything
- *  inserted without going through a sketch (catalog items, re-spawns), so the
- *  same item spawned twice reuses one cache row instead of stacking. */
+/** Mã băm nội dung ổn định của một kết quả — dùng làm khóa bộ nhớ tạm cho mọi
+ *  thứ được chèn vào mà không đi qua bản phác thảo (mục trong danh mục, lần tái
+ *  tạo lại), nên cùng một mục được tái tạo hai lần chỉ dùng lại một dòng cache
+ *  thay vì chồng lên nhau. */
 export function artifactContentHash(artifact: Artifact): string {
   const { scenario, params } = artifact.payload;
   const identifying =
@@ -51,9 +54,9 @@ export function artifactContentHash(artifact: Artifact): string {
   return 'out:' + fnv(identifying);
 }
 
-// ---------------------------------------------------------------- hashing
+// -------------------------------------------------------------------- băm
 
-/** 64-bit FNV-1a, rendered as 12 hex chars. */
+/** FNV-1a 64-bit, hiển thị dưới dạng 12 ký tự hex. */
 function fnv(text: string): string {
   let h1 = 0x811c9dc5;
   let h2 = 0x01000193;
@@ -66,9 +69,10 @@ function fnv(text: string): string {
   return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).slice(0, 12);
 }
 
-/** Stable content hash of the elements an artifact was generated from:
- *  id:version:versionNonce per element, sorted, then a 64-bit FNV-1a. The
- *  same drawing (and any subset of it) hashes the same way on any board. */
+/** Mã băm nội dung ổn định của các phần tử đã sinh ra một kết quả:
+ *  id:version:versionNonce cho từng phần tử, đã sắp xếp, rồi FNV-1a 64-bit.
+ *  Cùng một hình vẽ (và bất kỳ tập con nào của nó) cho cùng mã băm trên mọi
+ *  bảng. */
 export function hashSketch(elements: readonly ExcalidrawElement[]): string {
   const parts = elements
     .filter((el) => !el.isDeleted)
@@ -77,7 +81,7 @@ export function hashSketch(elements: readonly ExcalidrawElement[]): string {
   return fnv(parts.join('|'));
 }
 
-// ---------------------------------------------------------------- storage
+// ---------------------------------------------------------------- lưu trữ
 
 function newId(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 20);
@@ -98,7 +102,7 @@ function writeIndex(ids: string[]): void {
   try {
     localStorage.setItem(INDEX_KEY, JSON.stringify(ids));
   } catch (e) {
-    console.error('Could not write the output cache index', e);
+    console.error('Không thể ghi chỉ mục của bộ nhớ tạm kết quả', e);
   }
 }
 
@@ -114,7 +118,7 @@ function readEntry(id: string): CacheEntry | null {
   }
 }
 
-/** Newest first. Tolerates individual corrupt entries. */
+/** Mới nhất trước. Chịu được các mục bị hỏng riêng lẻ. */
 export function listCachedOutputs(): CachedOutput[] {
   return readIndex()
     .map(readEntry)
@@ -129,8 +133,8 @@ export function listCachedOutputs(): CachedOutput[] {
     }));
 }
 
-/** Store (or refresh) the output for a sketch hash. A repeat analyze of the
- *  same sketch updates the existing entry instead of stacking duplicates. */
+/** Lưu (hoặc làm mới) kết quả cho một mã băm bản phác thảo. Phân tích lại cùng
+ *  một bản phác thảo sẽ cập nhật mục đang có thay vì chồng thêm bản trùng. */
 export function putCachedOutput(
   hash: string,
   artifact: Artifact,
@@ -149,8 +153,8 @@ export function putCachedOutput(
     localStorage.setItem(ENTRY_PREFIX + entry.id, JSON.stringify(entry));
     if (!existing) writeIndex([entry.id, ...readIndex()]);
   } catch (e) {
-    // Quota is the realistic failure — a sim carries its whole HTML doc.
-    console.error('Could not cache the generated output', e);
+    // Hết dung lượng là lỗi thực tế hay gặp — một mô phỏng mang theo cả tài liệu HTML của nó.
+    console.error('Không thể lưu kết quả đã tạo vào bộ nhớ tạm', e);
   }
   return {
     id: entry.id,
@@ -161,7 +165,8 @@ export function putCachedOutput(
   };
 }
 
-/** Update the stored artifact payload for a cached entry (refine landed). */export function updateCachedArtifact(
+/** Cập nhật payload của kết quả đã lưu cho một mục trong bộ nhớ tạm (bước tinh
+ *  chỉnh đã hoàn tất). */export function updateCachedArtifact(
   id: string,
   payload: Artifact['payload'],
 ): void {
@@ -173,7 +178,7 @@ export function putCachedOutput(
       JSON.stringify({ ...entry, artifact: { ...entry.artifact, payload } }),
     );
   } catch (e) {
-    console.error('Could not update the cached output', e);
+    console.error('Không thể cập nhật kết quả trong bộ nhớ tạm', e);
   }
 }
 
@@ -186,7 +191,7 @@ export function markCachedSpawned(id: string): void {
       JSON.stringify({ ...entry, spawnedAt: new Date().toISOString() }),
     );
   } catch {
-    /* best effort — the timestamp is cosmetic */
+    /* cố gắng hết sức — dấu thời gian chỉ để hiển thị */
   }
 }
 
@@ -194,7 +199,7 @@ export function removeCachedOutput(id: string): void {
   try {
     localStorage.removeItem(ENTRY_PREFIX + id);
   } catch {
-    /* ignoring */
+    /* bỏ qua */
   }
   writeIndex(readIndex().filter((x) => x !== id));
 }
@@ -204,20 +209,20 @@ export function clearCachedOutputs(): void {
     try {
       localStorage.removeItem(ENTRY_PREFIX + id);
     } catch {
-      /* ignoring */
+      /* bỏ qua */
     }
   }
   writeIndex([]);
 }
 
-/** Total bytes the cache occupies — surfaced in the panel footer. */
+/** Tổng số byte bộ nhớ tạm chiếm dụng — hiển thị ở chân trang của bảng điều khiển. */
 export function cacheByteSize(): number {
   let total = 0;
   for (const id of readIndex()) {
     try {
       total += (localStorage.getItem(ENTRY_PREFIX + id) ?? '').length;
     } catch {
-      /* ignoring */
+      /* bỏ qua */
     }
   }
   return total;

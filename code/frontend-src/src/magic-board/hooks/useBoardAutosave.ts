@@ -1,13 +1,13 @@
 /**
- * Debounced local autosave (~800ms idle) — the ai4edu boards API replaced by
- * per-board localStorage records.
+ * Tự động lưu cục bộ có hoãn (~800ms khi rảnh) — API boards của ai4edu được
+ * thay bằng bản ghi localStorage cho từng bảng.
  *
- * markDirty() restarts the timer; flushNow() writes immediately (used before
- * a board switch and when the tab is hidden).
+ * markDirty() khởi động lại bộ đếm; flushNow() ghi ngay (dùng trước khi chuyển
+ * bảng và khi tab bị ẩn).
  *
- * The hook owns the "base" board object so a save always patches the full
- * record: BoardApp hands it the board it just loaded/switched to via adopt(),
- * and every save reports the updated record back through onSaved.
+ * Hook này giữ đối tượng bảng "gốc" để mỗi lần lưu luôn vá vào bản ghi đầy đủ:
+ * BoardApp đưa cho nó bảng vừa tải/vừa chuyển tới qua adopt(), và mỗi lần lưu
+ * báo bản ghi đã cập nhật trở lại qua onSaved.
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { saveBoard } from '../lib/storage';
@@ -16,8 +16,8 @@ import type { Artifact, Board, BoardScene, ChatMessage } from '../lib/types';
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
 export interface BoardPayload {
-  /** Omitted when no scene snapshot exists yet (canvas still mounting) — the
-   *  saver skips missing keys, so this never wipes a saved scene. */
+  /** Bỏ qua khi chưa có ảnh chụp cảnh (bảng vẽ còn đang gắn) — bộ lưu sẽ bỏ qua
+   *  các khóa thiếu, nên việc này không bao giờ xóa mất cảnh đã lưu. */
   scene?: BoardScene;
   chat_messages?: ChatMessage[];
   artifacts?: Artifact[];
@@ -36,7 +36,7 @@ export function useBoardAutosave(
   boardIdRef.current = boardId;
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
-  /** The last adopted board object, so a save patches the full record. */
+  /** Đối tượng bảng được adopt gần nhất, để mỗi lần lưu vá vào bản ghi đầy đủ. */
   const baseRef = useRef<Board | null>(null);
 
   const persist = useCallback((base: Board) => {
@@ -55,13 +55,12 @@ export function useBoardAutosave(
   }, [persist]);
 
   /**
-   * Write pending changes to the board the hook is currently pointed at.
-   * Call this BEFORE adopt()-ing a different board, otherwise the outgoing
-   * board's scene would be written under the new board's id.
+   * Ghi các thay đổi đang chờ xuống bảng mà hook hiện đang trỏ tới.
+   * Hãy gọi hàm này TRƯỚC khi adopt() một bảng khác, nếu không cảnh của bảng
+   * đang rời đi sẽ bị ghi dưới id của bảng mới.
    *
-   * `getPayload` reads the live canvas, so once the canvas has remounted for
-   * the new board the pending flag must be dropped instead — that is what
-   * `dropPending` is for.
+   * `getPayload` đọc bảng vẽ trực tiếp, nên khi bảng vẽ đã được gắn lại cho
+   * bảng mới thì phải bỏ cờ đang chờ — đó là việc của `dropPending`.
    */
   const flushNow = useCallback(() => {
     if (timerRef.current !== null) {
@@ -71,7 +70,7 @@ export function useBoardAutosave(
     if (boardIdRef.current && baseRef.current) persist(baseRef.current);
   }, [persist]);
 
-  /** Cancel a pending save without writing (board already switched). */
+  /** Hủy một lần lưu đang chờ mà không ghi (bảng đã được chuyển rồi). */
   const dropPending = useCallback(() => {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
@@ -79,14 +78,14 @@ export function useBoardAutosave(
     }
   }, []);
 
-  /** Point the autosave layer at a board (on load and on every switch). */
+  /** Trỏ tầng tự động lưu vào một bảng (khi tải và mỗi lần chuyển bảng). */
   const adopt = useCallback((board: Board) => {
     baseRef.current = board;
     boardIdRef.current = board.id;
   }, []);
 
-  // Flush pending work when the tab is hidden or closed — the debounce would
-  // otherwise lose the last few strokes.
+  // Ghi nốt phần đang chờ khi tab bị ẩn hoặc đóng — nếu không, bước hoãn sẽ
+  // làm mất vài nét vẽ cuối.
   useEffect(() => {
     const onHide = () => {
       if (document.visibilityState === 'hidden') flushNow();

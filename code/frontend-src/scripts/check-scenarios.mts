@@ -19,10 +19,85 @@ console.log('templates — exported set');
 {
   check('templates were exported', ids.length > 0, String(ids.length));
   check('every template has metadata', JSON.stringify(ids) === JSON.stringify(metaIds), `html=${ids.length} json=${metaIds.length}`);
-  check('the book reader is excluded (needs PDFs not in the repo)', !ids.includes('book'));
   check('anatomy_3d is present (3D heart)', ids.includes('anatomy_3d'));
   check('the 3D shape family is present', ['sphere', 'cone', 'torus', 'knot', 'mobius', 'platonic'].every((i) => ids.includes(i)));
   check('the equation plot is present', ids.includes('function_plot'));
+  check('the book reader is present', ids.includes('book'));
+}
+
+console.log('book — viewer wired, PDF supplied by the operator');
+{
+  const html = readFileSync(join(SCEN, 'book.html'), 'utf8');
+  // Both libraries must resolve to our local vendor tree, absolutely.
+  check(
+    'PageFlip loads from the local vendor copy',
+    html.includes("from '/mb-assets/vendor/page-flip/page-flip.module.js'"),
+  );
+  check(
+    'PDF.js loads from the local vendor copy',
+    html.includes("'/mb-assets/vendor/pdfjs/pdf.min.mjs'"),
+  );
+  check(
+    'the PDF.js worker is local too',
+    html.includes('/mb-assets/vendor/pdfjs/pdf.worker.min.mjs'),
+  );
+  check('CMaps and standard fonts are local', html.includes('cmaps/') && html.includes('standard_fonts/'));
+  check('the catalog is fetched absolutely', html.includes('`/mb-assets/books/catalog.json`'));
+  // The artifact bridge must use this app's names or the reader never gets its state.
+  check(
+    'the bridge uses this app’s names',
+    html.includes('__MAGIC_BOARD_ARTIFACT_ID__') && !html.includes('__AI4EDU_'),
+  );
+  check(
+    'postMessage uses the magic-board source',
+    html.includes("source: 'magic-board'") && html.includes("d.source === 'magic-board'"),
+  );
+
+  // The libraries really are on disk, and the PDF is the one operator-supplied
+  // file — it is copyrighted, so it is expected to be absent from the repo.
+  for (const f of [
+    'vendor/page-flip/page-flip.module.js',
+    'vendor/pdfjs/pdf.min.mjs',
+    'vendor/pdfjs/pdf.worker.min.mjs',
+    'books/catalog.json',
+  ]) {
+    check(`vendor asset present: ${f}`, existsSync(join(FRONTEND, 'public', 'mb-assets', f)));
+  }
+
+  const catalog = JSON.parse(
+    readFileSync(join(FRONTEND, 'public', 'mb-assets', 'books', 'catalog.json'), 'utf8'),
+  ) as { entries?: Record<string, { file?: string }>; aliases?: Record<string, string> };
+  const entries = Object.values(catalog.entries ?? {});
+  check('the catalog lists a book', entries.length > 0, String(entries.length));
+  check(
+    'every catalog file path is a books/ path',
+    entries.every((en) => typeof en.file === 'string' && en.file.startsWith('books/')),
+    JSON.stringify(entries.map((en) => en.file)),
+  );
+  check('aliases point at real entries', Object.values(catalog.aliases ?? {}).every((k) => k in (catalog.entries ?? {})));
+  const pdfPresent = entries.some((en) => en.file && existsSync(join(FRONTEND, 'public', 'mb-assets', en.file)));
+  console.log(
+    pdfPresent
+      ? '  ok   the book PDF is present'
+      : '  note the book PDF is not in the repo yet — drop it at public/mb-assets/books/ (viewer is ready)',
+  );
+}
+
+console.log('standalone simulations — small wrappers, local source files');
+{
+  for (const [id, source] of [
+    ['faraday_vi', 'faraday-vi'],
+    ['faraday_en', 'faraday-en'],
+    ['ph_scale_en', 'ph-scale-en'],
+  ]) {
+    const html = readFileSync(join(SCEN, `${id}.html`), 'utf8');
+    const sourcePath = join(FRONTEND, 'public', 'mb-assets', 'simulations', `${source}.html`);
+    check(`${id} preserves standalone simulation on disk`, existsSync(sourcePath));
+    check(`${id} uses a lightweight local wrapper`, html.includes(`src="/mb-assets/simulations/${source}.html"`) && html.length < 5000);
+    check(`${id} credits source and license`, html.includes('PhET Interactive Simulations') && html.includes('CC BY-NC 4.0'));
+  }
+  const vi = readFileSync(join(SCEN, 'faraday_vi.html'), 'utf8');
+  check('Vietnamese Faraday permits progress storage in nested iframe', vi.includes('allow-same-origin'));
 }
 
 console.log('templates — no leftover backend references');
@@ -182,9 +257,18 @@ console.log('catalog — entries match exported scenarios');
   // Every catalogued item should be reachable from at least one category.
   const anatomyRefs = [...src.matchAll(/anatomy\(\s*'([^']+)'/g)].map((m) => m[1]!);
   check('anatomy presets are declared', anatomyRefs.length >= 5, String(anatomyRefs.length));
+  // Structural, not literal: the catalog is localised, so assert the wiring —
+  // an anatomy preset focused on the heart, and a matching quick chip — rather
+  // than any particular spelling of the label.
   check(
-    'the named 3D heart preset exists',
-    src.includes("'3D heart'") && src.includes("'heart'"),
+    'a 3D heart preset exists',
+    /anatomy\(\s*'[^']+',\s*'[^']*',\s*'heart'/.test(src),
+  );
+  check('a heart quick chip exists', /\{\s*label:\s*'[^']*',\s*focus:\s*'heart'\s*\}/.test(src));
+  check(
+    'the textbook item points at the book template',
+    // The item helper takes the scenario id positionally, so match that shape.
+    /item\(\s*'[^']*',\s*'[^']*',\s*'book'/.test(src),
   );
 }
 

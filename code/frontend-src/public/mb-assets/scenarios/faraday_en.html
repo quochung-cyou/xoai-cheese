@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Faraday’s Electromagnetic Lab (EN)</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; font: 12px system-ui, sans-serif; }
+    body { display: flex; flex-direction: column; background: #101827; color: #fff; }
+    iframe { display: block; width: 100%; flex: 1; min-height: 0; border: 0; background: #fff; }
+    footer { padding: 5px 8px; background: #101827; }
+    a { color: #9bdcff; }
+    #error { display: none; padding: 10px; background: #7f1d1d; }
+  </style>
+</head>
+<body>
+  <div id="error" role="alert"></div>
+  <iframe title="Faraday’s Electromagnetic Lab (English)" src="/mb-assets/simulations/faraday-en.html" sandbox="allow-scripts allow-downloads" allow="fullscreen" loading="eager"></iframe>
+  <footer>Simulation by <a href="https://phet.colorado.edu/" target="_blank" rel="noopener noreferrer">PhET Interactive Simulations, University of Colorado Boulder</a> · <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC 4.0</a> (phi thương mại).</footer>
+  <script>
+    const PARAMS = __PARAMS__;
+    addEventListener('unhandledrejection', e => {
+      const error = document.getElementById('error');
+      error.textContent = String(e.reason);
+      error.style.display = 'block';
+    });
+  </script>
+</body>
+</html>

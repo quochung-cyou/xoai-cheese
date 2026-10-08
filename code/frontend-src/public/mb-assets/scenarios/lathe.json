@@ -4,5 +4,5 @@
   "params": "{\"profile\": \"vase\"|\"goblet\"|\"bulb\"; \"flat\": true|false — start flattened/unfolded} — all optional",
   "required_params": [],
   "param_defaults": {},
-  "title_template": "Revolution: {profile}"
+  "title_template": "Mặt tròn xoay: {profile}"
 }

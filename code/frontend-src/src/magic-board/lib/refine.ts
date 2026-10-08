@@ -1,15 +1,18 @@
 /**
- * Refine pipeline — port of the ai4edu backend's `app/services/refine.py`.
+ * Đường ống tinh chỉnh — bản chuyển từ `app/services/refine.py` của backend
+ * ai4edu.
  *
- * Stored payload -> prompt -> provider stream -> scanned edit lifecycle
- * events -> atomic commit at 'done'. The caller gets the same RefineEvent
- * vocabulary the old SSE endpoint produced, so the chat UI is unchanged.
+ * Payload đã lưu -> prompt -> luồng từ nhà cung cấp -> các sự kiện vòng đời
+ * chỉnh sửa đã được quét -> cam kết nguyên tử (atomic commit) tại 'done'. Bên
+ * gọi nhận được đúng bộ từ vựng RefineEvent mà điểm cuối SSE cũ tạo ra, nên giao
+ * diện chat không thay đổi.
  *
- * Two contracts:
- *  - html_sim: the model emits SEARCH/REPLACE (or a full REWRITE) markers;
- *    edits are validated against a working copy as they arrive.
- *  - elements: the model emits {ops, message} JSON; ops apply atomically to
- *    the skeleton list.
+ * Hai giao kèo:
+ *  - html_sim: mô hình phát ra các dấu mốc SEARCH/REPLACE (hoặc REWRITE toàn
+ *    bộ); các chỉnh sửa được kiểm tra hợp lệ trên một bản sao làm việc ngay khi
+ *    chúng đến.
+ *  - elements: mô hình phát ra JSON {ops, message}; các op áp dụng nguyên tử lên
+ *    danh sách phần tử khung.
  */
 import { PROMPT_REFINE, PROMPT_REFINE_ELEMENTS } from './prompts';
 import {
@@ -25,7 +28,7 @@ import { refineScenarioArtifact } from './refineScenarios';
 import type { LLMConfig } from './settings';
 import type { Artifact, RefineEvent, SkeletonElement } from './types';
 
-/** html_sim is an HTML doc edited via SEARCH/REPLACE markers. */
+/** html_sim là một tài liệu HTML được sửa qua các dấu mốc SEARCH/REPLACE. */
 const HTML_KINDS = new Set(['html_sim', 'scenario']);
 
 export interface RefineOptions {
@@ -37,7 +40,7 @@ function textPart(text: string) {
   return { type: 'text', text };
 }
 
-// ------------------------------------------------------------- elements
+// -------------------------------------------------------------- phần tử
 
 async function* streamElementsRefinement(
   cfg: LLMConfig,
@@ -74,7 +77,7 @@ async function* streamElementsRefinement(
   const ops = (parsed as { ops?: unknown }).ops;
   if (!Array.isArray(ops) || !ops.length) {
     throw new LlmError(
-      'The model returned no edits for the diagram. Try rephrasing the instruction.',
+      'Mô hình không trả về chỉnh sửa nào cho sơ đồ. Hãy thử diễn đạt lại yêu cầu.',
     );
   }
 
@@ -83,19 +86,19 @@ async function* streamElementsRefinement(
     newElements = applyElementOps(current, ops);
   } catch (e) {
     throw new LlmError(
-      `The model's edit didn't match the diagram (${
+      `Chỉnh sửa của mô hình không khớp với sơ đồ (${
         e instanceof Error ? e.message : e
-      }). Try rephrasing, or analyze again.`,
+      }). Hãy thử diễn đạt lại, hoặc phân tích lại.`,
     );
   }
 
   const message =
     String((parsed as { message?: unknown }).message ?? '') ||
-    `Applied ${ops.length} edit(s).`;
+    `Đã áp dụng ${ops.length} chỉnh sửa.`;
   yield { type: 'done', payload: { elements: newElements }, message };
 }
 
-// ----------------------------------------------------------------- html
+// ----------------------------------------------------------------- HTML
 
 async function* streamHtmlRefinement(
   cfg: LLMConfig,
@@ -136,8 +139,8 @@ async function* streamHtmlRefinement(
           yield { type: 'edit-start', index: se.index };
           break;
         case 'edit-search': {
-          // The search text is known while the replacement is still
-          // generating — validate it against the working copy now.
+          // Đoạn văn bản cần tìm đã biết trong khi phần thay thế vẫn đang được
+          // sinh ra — hãy kiểm tra hợp lệ nó trên bản sao làm việc ngay bây giờ.
           const lineNo = findMatchLine(working, se.search);
           located.set(se.index, lineNo);
           if (lineNo === null) {
@@ -145,7 +148,7 @@ async function* streamHtmlRefinement(
             yield {
               type: 'edit-invalid',
               index: se.index,
-              reason: 'search text not found in document',
+              reason: 'không tìm thấy đoạn văn bản cần tìm trong tài liệu',
               search: se.search,
             };
           } else {
@@ -164,7 +167,7 @@ async function* streamHtmlRefinement(
             yield {
               type: 'edit-invalid',
               index: se.index,
-              reason: 'skipped — search text did not match',
+              reason: 'bỏ qua — đoạn văn bản cần tìm không khớp',
               search: se.search,
               replace: se.replace,
             };
@@ -223,13 +226,13 @@ async function* streamHtmlRefinement(
 
   const narration = narrationParts.join('').trim();
 
-  // --- Resolve the final document ---
+  // --- Chốt tài liệu cuối cùng ---
   if (rewriteCode) {
     const code: string = rewriteCode;
     yield {
       type: 'done',
       payload: { html: code },
-      message: narration || 'Rewrote the simulation.',
+      message: narration || 'Đã viết lại mô phỏng.',
     };
     return;
   }
@@ -238,13 +241,13 @@ async function* streamHtmlRefinement(
     yield {
       type: 'done',
       payload: { html: working },
-      message: narration || `Applied ${edits.length} edit(s).`,
+      message: narration || `Đã áp dụng ${edits.length} chỉnh sửa.`,
     };
     return;
   }
 
-  // Fallback: a model that ignored the marker contract may still have
-  // produced the legacy JSON shape — try it before declaring failure.
+  // Dự phòng: một mô hình bỏ qua giao kèo dấu mốc có thể vẫn đã tạo ra cấu trúc
+  // JSON cũ — hãy thử nó trước khi tuyên bố thất bại.
   const raw = rawParts.join('');
   try {
     const parsed = parseLlmJson(raw) as Record<string, unknown>;
@@ -252,7 +255,7 @@ async function* streamHtmlRefinement(
       yield {
         type: 'done',
         payload: { html: parsed.simulation_code },
-        message: String(parsed.message ?? '') || narration || 'Done.',
+        message: String(parsed.message ?? '') || narration || 'Xong.',
       };
       return;
     }
@@ -261,37 +264,38 @@ async function* streamHtmlRefinement(
       yield {
         type: 'done',
         payload: { html: newCode },
-        message: String(parsed.message ?? '') || narration || 'Done.',
+        message: String(parsed.message ?? '') || narration || 'Xong.',
       };
       return;
     }
   } catch {
-    /* not the legacy shape either — fall through to the failure below */
+    /* cũng không phải cấu trúc cũ — chuyển xuống phần thất bại bên dưới */
   }
 
   if (failed.size) {
     throw new LlmError(
-      `The model's edit didn't match the document (edit(s) ${[
+      `Chỉnh sửa của mô hình không khớp với tài liệu (không áp dụng được chỉnh sửa ${[
         ...failed,
-      ].sort((a, b) => a - b)} failed to apply). Try rephrasing, or analyze again.`,
+      ].sort((a, b) => a - b)}). Hãy thử diễn đạt lại, hoặc phân tích lại.`,
     );
   }
   throw new LlmError(
-    'The model returned no usable edits for this document. Try rephrasing the instruction.',
+    'Mô hình không trả về chỉnh sửa nào dùng được cho tài liệu này. Hãy thử diễn đạt lại yêu cầu.',
   );
 }
 
-// ------------------------------------------------------------- entrypoint
+// ---------------------------------------------------------- điểm vào
 
 /**
- * Refine one artifact by natural-language instruction, emitting semantic
- * progress events. Errors are raised (the caller turns them into an 'error'
- * event / chat reply); the final payload arrives via a 'done' event.
+ * Tinh chỉnh một kết quả bằng yêu cầu ngôn ngữ tự nhiên, phát ra các sự kiện
+ * tiến trình mang tính ngữ nghĩa. Lỗi được ném ra (bên gọi biến chúng thành sự
+ * kiện 'error' / câu trả lời trong chat); payload cuối cùng đến qua sự kiện
+ * 'done'.
  *
- * Three contracts, chosen by artifact kind:
- *  - elements : {ops, message} JSON applied to the skeleton list
- *  - scenario : {params, message} JSON merged and re-rendered from template
- *  - html_sim : SEARCH/REPLACE (or REWRITE) markers over the document
+ * Ba giao kèo, chọn theo loại kết quả:
+ *  - elements : JSON {ops, message} áp dụng lên danh sách phần tử khung
+ *  - scenario : JSON {params, message} được trộn vào và kết xuất lại từ mẫu
+ *  - html_sim : các dấu mốc SEARCH/REPLACE (hoặc REWRITE) trên tài liệu
  */
 export async function* refineArtifact(
   cfg: LLMConfig,
@@ -300,20 +304,20 @@ export async function* refineArtifact(
   signal?: AbortSignal,
   onEvent?: (ev: RefineEvent) => void,
 ): AsyncGenerator<RefineEvent> {
-  if (!instruction.trim()) throw new LlmError('An instruction is required.');
+  if (!instruction.trim()) throw new LlmError('Cần có một yêu cầu.');
 
   if (artifact.kind === 'elements') {
     if (!artifact.payload.elements?.length) {
-      throw new LlmError('This diagram has no elements to refine.');
+      throw new LlmError('Sơ đồ này không có phần tử nào để tinh chỉnh.');
     }
     yield* streamElementsRefinement(cfg, artifact, instruction, signal);
     return;
   }
 
-  // Template-backed artifacts are refined through their params, never by
-  // editing the rendered document. That path is a plain function, so its
-  // progress events are forwarded through onEvent and only the result is
-  // yielded here.
+  // Các kết quả dựa trên mẫu được tinh chỉnh qua params của chúng, không bao giờ
+  // bằng cách sửa tài liệu đã kết xuất. Đường đó là một hàm thuần, nên các sự
+  // kiện tiến trình của nó được chuyển tiếp qua onEvent và ở đây chỉ phát ra kết
+  // quả.
   if (artifact.payload.scenario) {
     const result = await refineScenarioArtifact(
       cfg,
@@ -328,18 +332,18 @@ export async function* refineArtifact(
 
   if (HTML_KINDS.has(artifact.kind)) {
     if (!(artifact.payload.html ?? '').trim()) {
-      throw new LlmError('This artifact has no document to refine.');
+      throw new LlmError('Kết quả này không có tài liệu nào để tinh chỉnh.');
     }
     yield* streamHtmlRefinement(cfg, artifact, instruction, signal);
     return;
   }
 
-  throw new LlmError(`Unknown artifact kind ${JSON.stringify(artifact.kind)}.`);
+  throw new LlmError(`Loại kết quả không xác định ${JSON.stringify(artifact.kind)}.`);
 }
 
-/** Convenience wrapper: run a refinement and hand every event to a callback.
- *  Resolves with the final payload (undefined = the model answered but
- *  changed nothing). */
+/** Lớp bao tiện dụng: chạy một lượt tinh chỉnh và đưa mọi sự kiện cho callback.
+ *  Trả về payload cuối cùng (undefined = mô hình đã trả lời nhưng không thay đổi
+ *  gì). */
 export async function refineArtifactToCallback(
   cfg: LLMConfig,
   artifact: Artifact,
@@ -375,10 +379,10 @@ export async function refineArtifactToCallback(
 }
 
 export interface PendingOutcome {
-  /** The artifact's payload as returned by the model's 'done' event. */
+  /** Payload của kết quả như được sự kiện 'done' của mô hình trả về. */
   payload?: Artifact['payload'];
-  /** The full updated artifact — carries a refreshed title/analysis for
-   *  scenario refinements. */
+  /** Kết quả đầy đủ đã cập nhật — mang theo tiêu đề/phân tích mới cho các lượt
+   *  tinh chỉnh kịch bản. */
   artifact?: Artifact;
   message?: string;
   error?: string;

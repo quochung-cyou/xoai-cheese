@@ -1,0 +1,18 @@
+{
+  "match": "a textbook, schoolbook, or flipbook — a drawn/open book, \"book\", \"textbook\", \"ebook\", \"flipbook\", \"sách\", \"sách giáo khoa\", \"SGK\", \"mở sách\", or a written book title on the board (e.g. \"SGK Toán 10 tập 1\", \"Toán 10 Kết nối tri thức\", \"math grade 10\"). Only titles in the hosted book catalog resolve — other books do not match.",
+  "params": "{\"book\": \"<book title exactly as written/drawn — e.g. 'SGK Toán 10 tập 1', 'Kết nối tri thức Toán 10', 'math 10'>\", \"page\": int} — 'page' is the 1-based page to open at; omit when not indicated.",
+  "required_params": [],
+  "param_defaults": {
+    "book": "sgk",
+    "page": 1
+  },
+  "title_template": "Sách: {name}",
+  "analysis": {
+    "details_file": "books/catalog.json",
+    "key_param": "book",
+    "require_resolved": true,
+    "notes_fields": [
+      "description"
+    ]
+  }
+}

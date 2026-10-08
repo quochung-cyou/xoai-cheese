@@ -1,34 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head><script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Yêu cầu thất bại';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Conic Sections</title>
+<title>Thiết diện conic</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden;
                font-family: ui-sans-serif, system-ui, sans-serif;
@@ -93,14 +94,14 @@ addEventListener('unhandledrejection', function(e){
 <body>
 <div id="stage"></div>
 <div id="modes">
-  <button data-m="orbit" class="on" title="Orbit camera (v)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M10.4 21.9a10 10 0 0 0 9.94-15.42"/><path d="M13.5 2.1a10 10 0 0 0-9.84 15.42"/></svg></button>
-  <button data-m="translate" title="Move (g)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg></button>
-  <button data-m="rotate" title="Rotate (r)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
-  <button data-m="scale" title="Scale (s)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 9 15"/><path d="M21 3h-6"/><path d="M21 3v6"/><path d="M3 21l12-12"/><path d="M3 21h6"/><path d="M3 21v-6"/></svg></button>
-  <button data-m="paint" title="Paint patches (p)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></button>
-  <button id="flatbtn" title="Flatten / unfold (f)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6"/><rect x="3" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/><rect x="15" y="9" width="6" height="6"/><rect x="9" y="15" width="6" height="6"/></svg></button>
-  <button id="slicebtn" title="Slice plane (x)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 14-6 6h9v-3"/><path d="M18.37 3.63 8 14l3 3L21.37 6.63a2.12 2.12 0 1 0-3-3Z"/></svg></button>
-  <button id="grabbtn" title="Grab plane — then use move/rotate tools" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v16h16"/><path d="m5 19 6-6"/><path d="m2 6 3-3 3 3"/><path d="m18 16 3 3-3 3"/></svg></button>
+  <button data-m="orbit" class="on" title="Xoay camera (v)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M10.4 21.9a10 10 0 0 0 9.94-15.42"/><path d="M13.5 2.1a10 10 0 0 0-9.84 15.42"/></svg></button>
+  <button data-m="translate" title="Di chuyển (g)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg></button>
+  <button data-m="rotate" title="Xoay (r)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+  <button data-m="scale" title="Thu phóng (s)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 9 15"/><path d="M21 3h-6"/><path d="M21 3v6"/><path d="M3 21l12-12"/><path d="M3 21h6"/><path d="M3 21v-6"/></svg></button>
+  <button data-m="paint" title="Tô màu mảng (p)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></button>
+  <button id="flatbtn" title="Trải phẳng / mở ra (f)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6"/><rect x="3" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/><rect x="15" y="9" width="6" height="6"/><rect x="9" y="15" width="6" height="6"/></svg></button>
+  <button id="slicebtn" title="Mặt cắt (x)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 14-6 6h9v-3"/><path d="M18.37 3.63 8 14l3 3L21.37 6.63a2.12 2.12 0 1 0-3-3Z"/></svg></button>
+  <button id="grabbtn" title="Nắm mặt phẳng — rồi dùng công cụ di chuyển/xoay" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v16h16"/><path d="m5 19 6-6"/><path d="m2 6 3-3 3 3"/><path d="m18 16 3 3-3 3"/></svg></button>
 
 </div>
 <div id="palette"></div>
@@ -113,35 +114,35 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
-// __PARAMS__ is substituted by the backend's scenario renderer; left
-// unsubstituted (dev/test) the try/catch yields an empty map.
+// __PARAMS__ do bộ kết xuất kịch bản của backend thay thế; nếu để nguyên
+// (dev/test) thì try/catch sẽ cho ra một map rỗng.
 const SCENARIO_PARAMS = (() => {
   try { return __PARAMS__; } catch { return {}; }
 })();
 
 const stage = document.getElementById('stage');
 
-// ---------------- three setup ----------------
+// ---------------- thiết lập three ----------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 stage.appendChild(renderer.domElement);
 
-// Sandboxed srcdoc iframes can't be transparent (opaque white in
-// Chrome), so the doc body paints the board color instead — the host
-// syncs live changes over postMessage. The renderer stays alpha so
-// that color is what shows through.
+// Iframe srcdoc bị sandbox không thể trong suốt (Chrome hiển thị màu
+// trắng đục), nên phần body của tài liệu tự tô màu bảng — host đồng bộ
+// các thay đổi trực tiếp qua postMessage. Renderer vẫn giữ alpha để màu
+// đó lộ ra phía sau.
 const scene = new THREE.Scene();
 const setBoardBg = (c) => {
   document.documentElement.style.background = c;
   document.body.style.background = c;
 };
 window.parent.postMessage({
-  source: 'ai4edu', type: 'ready',
-  artifactId: window.__AI4EDU_ARTIFACT_ID__ }, '*');
+  source: 'magic-board', type: 'ready',
+  artifactId: window.__MAGIC_BOARD_ARTIFACT_ID__ }, '*');
 addEventListener('message', (e) => {
   const d = e.data;
-  if (d && d.source === 'ai4edu' && typeof d.boardBg === 'string' &&
+  if (d && d.source === 'magic-board' && typeof d.boardBg === 'string' &&
       /^#[0-9a-f]{3,8}$/i.test(d.boardBg)) setBoardBg(d.boardBg);
 });
 const camera = new THREE.PerspectiveCamera(
@@ -166,23 +167,34 @@ new ResizeObserver(() => {
 }).observe(stage);
 renderer.setSize(stage.clientWidth, stage.clientHeight);
 
-// Everything transformable lives in one group so the gizmo moves the
-// whole sim as a unit.
+// Mọi thứ có thể biến đổi đều nằm trong một group để gizmo di chuyển
+// toàn bộ mô phỏng như một khối.
 const shape = new THREE.Group();
 scene.add(shape);
 
 
-// ---------------- sim helpers ----------------
+// ---------------- hàm hỗ trợ mô phỏng ----------------
 const TICKS = [];
 const tick = (f) => TICKS.push(f);
 
 const paramsEl = document.getElementById('params');
-// Control keys = normalized labels ('major R' -> 'major_r'); a scenario
-// seeds any control by that key via __PARAMS__. The handler fires once
-// on registration with the initial value, so sims need no separate
-// default-init call.
+// Khoá điều khiển = nhãn đã chuẩn hoá ('major R' -> 'major_r'); kịch bản
+// gieo giá trị cho bất kỳ điều khiển nào bằng khoá đó qua __PARAMS__.
+// Hàm xử lý chạy một lần lúc đăng ký với giá trị ban đầu, nên mô phỏng
+// không cần lời gọi khởi tạo mặc định riêng.
 const pKey = (l) =>
   l.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+// Nhãn hiển thị tiếng Việt, tra theo khoá điều khiển ở trên; các khoá tiếng Anh
+// vẫn là khoá gieo giá trị của kịch bản nên không được đổi.
+const VN_LABEL = {
+  radius: 'Bán kính', height: 'Chiều cao',
+  major_r: 'Bán kính lớn', minor_r: 'Bán kính nhỏ',
+  tilt: 'Nghiêng °', offset: 'Độ lệch', spin: 'Quay °', cut: 'Kiểu cắt',
+  curvature_a: 'Độ cong a', waist_a: 'Eo a', turns: 'Số vòng',
+};
+// Nhãn hiển thị cho các giá trị enum; giá trị gửi vào logic vẫn là mã tiếng Anh.
+const VN_OPT = { full: 'toàn phần', above: 'phía trên', below: 'phía dưới' };
 function param(label, min, max, val, step, fn) {
   const sv = SCENARIO_PARAMS[pKey(label)];
   const init = typeof sv === 'number' && isFinite(sv) ? sv : val;
@@ -190,7 +202,7 @@ function param(label, min, max, val, step, fn) {
   row.className = 'param';
   const name = document.createElement('span');
   name.className = 'pname';
-  name.textContent = label;
+  name.textContent = VN_LABEL[pKey(label)] || label;
   const inp = document.createElement('input');
   inp.type = 'range';
   inp.min = min; inp.max = max; inp.step = step; inp.value = init;
@@ -214,11 +226,12 @@ function pick(label, options, fn) {
   row.className = 'param';
   const name = document.createElement('span');
   name.className = 'pname';
-  name.textContent = label;
+  name.textContent = VN_LABEL[pKey(label)] || label;
   const sel = document.createElement('select');
   for (const opt of options) {
     const o = document.createElement('option');
-    o.value = o.textContent = opt;
+    o.value = opt;
+    o.textContent = VN_OPT[opt] || opt;
     sel.append(o);
   }
   const canonical = options.find(
@@ -231,12 +244,12 @@ function pick(label, options, fn) {
   return row;
 }
 
-// ---------------- flatten ----------------
+// ---------------- trải phẳng ----------------
 let FLAT = 0, FLATTGT = 0;
 const flat = () => FLAT;
 const FLATCHBS = [];
 const onFlatten = (f) => FLATCHBS.push(f);
-const DW = 3.0, DH = 2.0;             // flat domain rect size
+const DW = 3.0, DH = 2.0;             // kích thước hình chữ nhật miền phẳng
 const chart = (u, v) =>
   new THREE.Vector3((u - 0.5) * DW, (v - 0.5) * DH, 0);
 
@@ -248,7 +261,7 @@ function flattenMesh(mesh) {
   FLATMESHES.push({ mesh, pos, uv, base: pos.array.slice() });
 }
 let _flatApplied = -1;
-// Sims that rebuild geometry call this before re-registering flattenMesh.
+// Các mô phỏng dựng lại hình học gọi hàm này trước khi đăng ký lại flattenMesh.
 const clearFlat = () => { FLATMESHES.length = 0; _flatApplied = -1; };
 function applyFlatten() {
   if (FLAT === _flatApplied) return;
@@ -270,10 +283,10 @@ function applyFlatten() {
 }
 
 
-// ---------------- paint ----------------
-// Patch = a set of triangles. 'faces' buckets by rounded face normal;
-// [u,v] tiles the uv domain into a grid of cells. Painting is groups +
-// a material array — no extra meshes, wireframe overlays unaffected.
+// ---------------- tô màu ----------------
+// Mảng (patch) = một tập tam giác. 'faces' gom nhóm theo pháp tuyến mặt
+// đã làm tròn; [u,v] chia miền uv thành một lưới ô. Việc tô màu dùng
+// group + mảng material — không thêm mesh, lớp phủ khung dây không đổi.
 const PALETTE_COLORS = ["#93c5fd","#f9a8d4","#86efac","#fde68a","#fca5a5","#c4b5fd","#67e8f9","#fbbf24"];
 let PAINTING = false;
 let paintColor = PALETTE_COLORS[0];
@@ -328,7 +341,7 @@ function applyPaint(entry) {
   }
   entry.mesh.material = mats;
   geo.clearGroups();
-  // Groups need contiguous runs — one per run of equal material index.
+  // Group cần các đoạn liền nhau — mỗi đoạn ứng với chỉ số material bằng nhau.
   const mi = entry.patchOf.map((key) =>
     entry.painted.has(key) ? colorIdx.get(entry.painted.get(key)) : 0);
   let s = 0;
@@ -353,7 +366,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (!PAINTING || !downXY) return;
   const dx = e.clientX - downXY[0], dy = e.clientY - downXY[1];
   downXY = null;
-  if (dx * dx + dy * dy > 16) return;      // a drag is orbit, not a click
+  if (dx * dx + dy * dy > 16) return;      // kéo rê là xoay camera, không phải nhấp chuột
   const r = renderer.domElement.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(
     ((e.clientX - r.left) / r.width) * 2 - 1,
@@ -369,7 +382,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   applyPaint(entry);
 });
 
-// Swatch palette — shown only in paint mode.
+// Bảng màu mẫu — chỉ hiện ở chế độ tô màu.
 const paletteEl = document.getElementById('palette');
 function addSwatch(col) {
   const b = document.createElement('button');
@@ -385,7 +398,7 @@ function addSwatch(col) {
 PALETTE_COLORS.forEach(addSwatch);
 const erase = document.createElement('button');
 erase.className = 'erase';
-erase.title = 'Erase patch color';
+erase.title = 'Xoá màu mảng';
 erase.addEventListener('click', () => {
   paintColor = null;
   [...paletteEl.children].forEach((x) => x.classList.toggle('on', x === erase));
@@ -393,7 +406,7 @@ erase.addEventListener('click', () => {
 paletteEl.append(erase);
 const reset = document.createElement('button');
 reset.className = 'reset';
-reset.textContent = 'reset';
+reset.textContent = 'Đặt lại';
 reset.addEventListener('click', () => {
   for (const p of PAINTABLES) { p.painted.clear(); applyPaint(p); }
 });
@@ -402,23 +415,24 @@ paletteEl.children[0].classList.add('on');
 
 
 
-// ---------------- slice ----------------
-// A world-space plane cuts every registered mesh; the section is drawn
-// as thick segments and projected into a 2D inset. The 'cut' pick clips
-// either side via localClipping — the classic look-inside-the-solid.
+// ---------------- cắt lát ----------------
+// Một mặt phẳng trong không gian thế giới cắt mọi mesh đã đăng ký; thiết
+// diện được vẽ thành các đoạn đậm và chiếu vào ô nhỏ 2D. Lựa chọn 'cut'
+// cắt bỏ một bên nhờ localClipping — kiểu nhìn xuyên vào khối kinh điển.
 renderer.localClippingEnabled = true;
 const SLICABLES = [];
 const sliceable = (m) => SLICABLES.push(m);
 const clearSlice = () => { SLICABLES.length = 0; };
-let SLICECLIP = null;                     // null = show both sides
+let SLICECLIP = null;                     // null = hiện cả hai phía
 
 let sliceTilt = 35, sliceOffset = 0.35, sliceSpin = 0;
 const sliceN = new THREE.Vector3(), sliceP = new THREE.Vector3();
 const cutPlane = new THREE.Plane();
 const clipAbove = new THREE.Plane(), clipBelow = new THREE.Plane();
 
-// Plane visuals live in a group — a gizmo can drive its pose directly
-// (circle faces local +Z, arrow points +Z; the group pose IS the plane).
+// Phần hiển thị của mặt phẳng nằm trong một group — gizmo có thể điều
+// khiển trực tiếp tư thế của nó (hình tròn hướng theo +Z cục bộ, mũi tên
+// chỉ +Z; tư thế của group CHÍNH LÀ mặt phẳng).
 const planeGroup = new THREE.Group();
 scene.add(planeGroup);
 const planeMesh = new THREE.Mesh(
@@ -445,7 +459,7 @@ const _sliceInScene = (o) => {
   return false;
 };
 
-// The whole tool is hidden until the toolbar button turns it on.
+// Toàn bộ công cụ bị ẩn cho tới khi nút trên thanh công cụ bật nó lên.
 let sliceOn = false, sliceCut = 'full';
 const sliceRows = [
   param('tilt °', 0, 180, sliceTilt, 1, (v) => (sliceTilt = v)),
@@ -457,13 +471,13 @@ const sliceBtnEl = document.getElementById('slicebtn');
 const grabBtnEl = document.getElementById('grabbtn');
 let PLANE_GRAB = false;
 function setGrab(on) {
-  // Early return keeps the eval-time setSlice(false) away from curMode —
-  // it's a let in gizmoJs emitted after this block (typeof on a let in
-  // TDZ throws, it doesn't return 'undefined').
+  // Thoát sớm để lời gọi setSlice(false) lúc nạp không đụng tới curMode —
+  // nó là một let trong gizmoJs được phát ra sau khối này (typeof trên
+  // một let trong TDZ sẽ ném lỗi, chứ không trả về 'undefined').
   if (on === PLANE_GRAB) return;
   PLANE_GRAB = on;
   grabBtnEl.classList.toggle('on', on);
-  // Re-run the current mode so the gizmo jumps between shape and plane.
+  // Chạy lại chế độ hiện tại để gizmo chuyển qua lại giữa hình và mặt phẳng.
   setMode(curMode);
 }
 grabBtnEl.addEventListener('click', () => setGrab(!PLANE_GRAB));
@@ -474,7 +488,7 @@ function applyCut() {
 function setSlice(on) {
   sliceOn = on;
   sliceBtnEl.classList.toggle('on', on);
-  sliceBtnEl.title = on ? 'Hide slice plane (x)' : 'Slice plane (x)';
+  sliceBtnEl.title = on ? 'Ẩn mặt cắt (x)' : 'Mặt cắt (x)';
   planeGroup.visible = sliceLine.visible = on;
   sliceRead.style.display = sliceCv.style.display = on ? '' : 'none';
   grabBtnEl.style.display = on ? '' : 'none';
@@ -487,11 +501,11 @@ addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'x' && !e.repeat) setSlice(!sliceOn);
 });
 setSlice(false);
-// Scenario: open the slice tool on load (tilt/offset/spin/cut seed
-// through the generic param/pick init above).
+// Kịch bản: mở công cụ cắt ngay khi tải (tilt/offset/spin/cut được gieo
+// qua phần khởi tạo param/pick chung ở trên).
 if (SCENARIO_PARAMS.slice) setSlice(true);
 
-// Write a param row's input + readout when the gizmo drives the values.
+// Ghi vào ô nhập và số hiển thị của hàng tham số khi gizmo điều khiển giá trị.
 const rowVal = (row, v) => {
   const inp = row.querySelector('input'), out = row.querySelector('.pval');
   if (inp) inp.value = v;
@@ -504,14 +518,14 @@ const _sa = new THREE.Vector3(), _sb = new THREE.Vector3(),
 tick(() => {
   if (!sliceOn) return;
   if (!PLANE_GRAB) {
-    // Sliders drive the pose.
+    // Thanh trượt điều khiển tư thế.
     const th = (sliceTilt * Math.PI) / 180, ph = (sliceSpin * Math.PI) / 180;
     sliceN.set(Math.sin(th) * Math.cos(ph), Math.cos(th),
                Math.sin(th) * Math.sin(ph));
     planeGroup.position.copy(sliceN).multiplyScalar(sliceOffset);
     planeGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), sliceN);
   }
-  // The group pose is the plane — read normal + a point from it.
+  // Tư thế của group chính là mặt phẳng — đọc pháp tuyến và một điểm từ đó.
   sliceN.set(0, 0, 1).applyQuaternion(planeGroup.quaternion);
   sliceP.copy(planeGroup.position);
   cutPlane.setFromNormalAndCoplanarPoint(sliceN, sliceP);
@@ -519,7 +533,7 @@ tick(() => {
   clipAbove.set(sliceN, -_sOff);
   clipBelow.copy(clipAbove).negate();
   if (PLANE_GRAB) {
-    // Gizmo drives the pose — reflect it back into the sliders.
+    // Gizmo điều khiển tư thế — phản chiếu ngược lại vào các thanh trượt.
     sliceTilt = Math.round(
       Math.acos(Math.min(1, Math.max(-1, sliceN.y))) * 180 / Math.PI);
     sliceSpin = Math.round(
@@ -530,7 +544,7 @@ tick(() => {
     rowVal(sliceRows[2], sliceSpin);
   }
 
-  // Plane x triangles -> world-space section segments.
+  // Mặt phẳng × tam giác -> các đoạn thiết diện trong không gian thế giới.
   const segs = [];
   for (const m of SLICABLES) {
     if (!_sliceInScene(m)) continue;
@@ -562,7 +576,7 @@ tick(() => {
   sliceLine.geometry.setAttribute('position',
     new THREE.BufferAttribute(new Float32Array(segs), 3));
 
-  // 2D inset — project the section onto the plane's own basis.
+  // Ô nhỏ 2D — chiếu thiết diện lên hệ cơ sở của chính mặt phẳng.
   const u = Math.abs(sliceN.y) > 0.99
     ? new THREE.Vector3(1, 0, 0)
     : new THREE.Vector3(0, 1, 0).cross(sliceN).normalize();
@@ -604,25 +618,25 @@ tick(() => {
 
 
 
-// ---------------- flatten toggle ----------------
-// FLATTGT is the target; the RAF loop eases FLAT toward it.
+// ---------------- bật/tắt trải phẳng ----------------
+// FLATTGT là giá trị đích; vòng lặp RAF đưa FLAT tiến dần tới đó.
 const flatBtnEl = document.getElementById('flatbtn');
 function toggleFlat() {
   FLATTGT = FLATTGT ? 0 : 1;
   flatBtnEl.classList.toggle('on', FLATTGT === 1);
-  flatBtnEl.title = FLATTGT ? 'Refold (f)' : 'Flatten / unfold (f)';
+  flatBtnEl.title = FLATTGT ? 'Gấp lại (f)' : 'Trải phẳng / mở ra (f)';
 }
 flatBtnEl.addEventListener('click', toggleFlat);
 addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'f' && !e.repeat) toggleFlat();
 });
-if (SCENARIO_PARAMS.flat) toggleFlat();   // scenario: start unfolded
+if (SCENARIO_PARAMS.flat) toggleFlat();   // kịch bản: bắt đầu ở trạng thái trải phẳng
 
-// ---------------- sim ----------------
+// ---------------- mô phỏng ----------------
 
 const R = 1.0, H = 1.4;
-const ALPHA = Math.atan(R / H);                    // cone half-angle
-const CRIT = 90 - (ALPHA * 180) / Math.PI;         // parabola tilt
+const ALPHA = Math.atan(R / H);                    // nửa góc đỉnh nón
+const CRIT = 90 - (ALPHA * 180) / Math.PI;         // độ nghiêng ứng với parabol
 
 const mat = new THREE.MeshStandardMaterial({
   color: 0xfdba74, metalness: 0.05, roughness: 0.6,
@@ -630,7 +644,7 @@ const mat = new THREE.MeshStandardMaterial({
 const wireMat = new THREE.MeshBasicMaterial({
   color: 0x9a3412, wireframe: true, transparent: true, opacity: 0.25 });
 
-// Top nappe: apex at origin, base circle at y=H. Bottom mirrored.
+// Tầng trên: đỉnh tại gốc toạ độ, đường tròn đáy tại y=H. Tầng dưới đối xứng.
 const top = new THREE.Mesh(
   new THREE.CylinderGeometry(R, 0.001, H, 72, 8, true), mat);
 top.position.y = H / 2;
@@ -652,27 +666,29 @@ paintable(bot, [10, 4]);
 flattenMesh(top);
 flattenMesh(bot);
 
-// Section type: tilt < crit -> ellipse (0 = circle), = crit -> parabola,
-// > crit -> hyperbola (cuts both nappes). Near the apex it's degenerate.
+// Loại thiết diện: nghiêng < tới hạn -> elip (0 = đường tròn),
+// = tới hạn -> parabol, > tới hạn -> hyperbol (cắt cả hai tầng).
+// Gần đỉnh thì suy biến.
 tick(() => {
   const t = sliceTilt, d = Math.abs(sliceOffset);
-  const crit = 'crit ' + CRIT.toFixed(1) + '°';
-  if (d < 0.05) setSliceInfo('degenerate — through the apex');
-  else if (Math.abs(t - CRIT) < 0.6) setSliceInfo('parabola  (' + crit + ')');
-  else if (t < CRIT) setSliceInfo((t === 0 ? 'circle' : 'ellipse') +
+  const crit = 'tới hạn ' + CRIT.toFixed(1) + '°';
+  if (d < 0.05) setSliceInfo('suy biến — đi qua đỉnh nón');
+  else if (Math.abs(t - CRIT) < 0.6) setSliceInfo('parabol  (' + crit + ')');
+  else if (t < CRIT) setSliceInfo((t === 0 ? 'đường tròn' : 'elip') +
     '  (' + crit + ')');
-  else setSliceInfo('hyperbola — both nappes  (' + crit + ')');
+  else setSliceInfo('hyperbol — cả hai tầng  (' + crit + ')');
 });
 
 
-// ---------------- transform gizmo ----------------
-// r169+ API: TransformControls extends Controls; the visible gizmo is a
-// separate helper added to the scene. Starts detached — 'move' reveals it.
+// ---------------- gizmo biến đổi ----------------
+// API từ r169+: TransformControls kế thừa Controls; gizmo nhìn thấy được
+// là một helper riêng được thêm vào scene. Ban đầu nó không gắn vào đâu —
+// chế độ 'move' sẽ hiện nó ra.
 const gizmo = new TransformControls(camera, renderer.domElement);
 scene.add(gizmo.getHelper());
 gizmo.size = 0.8;
 gizmo.addEventListener('dragging-changed', (e) => {
-  controls.enabled = !e.value;   // never fight OrbitControls for a drag
+  controls.enabled = !e.value;   // không tranh chấp với OrbitControls khi kéo
 });
 const modeButtons = [...document.querySelectorAll('#modes button[data-m]')];
 let curMode = 'orbit';
@@ -681,8 +697,8 @@ function setMode(m) {
   modeButtons.forEach((b) => b.classList.toggle('on', b.dataset.m === m));
   gizmo.detach();
   if (m === 'translate' || m === 'rotate' || m === 'scale') {
-    // Grab mode retargets the gizmo at the slice plane (scale stays
-    // on the shape — scaling a plane is meaningless).
+    // Chế độ nắm bắt hướng gizmo sang mặt phẳng cắt (riêng scale vẫn
+    // áp lên hình — phóng tỉ lệ một mặt phẳng là vô nghĩa).
     const target =
       typeof PLANE_GRAB !== 'undefined' && PLANE_GRAB && m !== 'scale'
         ? planeGroup : shape;

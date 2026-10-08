@@ -1,30 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head><script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Yêu cầu thất bại';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>
 <meta charset="utf-8">
 <style>
@@ -47,11 +48,11 @@ addEventListener('unhandledrejection', function(e){
 </style>
 </head>
 <body>
-<header>Simple Pendulum<span id="status">ready</span></header>
+<header>Con lắc đơn<span id="status">sẵn sàng</span></header>
 <div id="stage"><canvas id="cv"></canvas></div>
 <div id="controls">
-  <button id="play">Play</button>
-  <button id="reset" class="ghost">Reset</button>
+  <button id="play">Phát</button>
+  <button id="reset" class="ghost">Đặt lại</button>
   <label>L (m) <input id="len" type="range" min="20" max="200" value="100"><span class="val" id="lenV"></span></label>
   <label>θ₀ (°) <input id="ang" type="range" min="5" max="80" value="20"><span class="val" id="angV"></span></label>
   <label>g <input id="g" type="range" min="16" max="250" value="98"><span class="val" id="gV"></span></label>
@@ -67,9 +68,9 @@ const P = {
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const status = document.getElementById('status');
 let th = P.th0, om = 0, playing = false, raf = null, t = 0, last = 0;
-let px2m; // pixels per meter — fit 1.3 * L into viewport height
+let px2m; // pixel trên mét — vừa 1.3 * L vào chiều cao khung nhìn
 
-// Exact-ish integrator: small-angle RK4 on th'' = -(g/L) sin(th)
+// Bộ tích phân gần đúng: RK4 góc nhỏ cho th'' = -(g/L) sin(th)
 function deriv(th, om) { return [om, -(P.g / P.L) * Math.sin(th)]; }
 function step(dt) {
   const [k1a, k1b] = deriv(th, om);
@@ -87,21 +88,21 @@ function draw() {
   const px = w / 2, py = h * 0.12;
   const bx = px + Math.sin(th) * P.L * px2m;
   const by = py + Math.cos(th) * P.L * px2m;
-  // grid dots
+  // các điểm lưới
   ctx.fillStyle = '#e2e8f0';
   for (let gx = 20; gx < w; gx += 40) for (let gy = 20; gy < h; gy += 40) ctx.fillRect(gx, gy, 1.5, 1.5);
-  // arc guide
+  // cung dẫn hướng
   ctx.strokeStyle = '#c7d2fe'; ctx.setLineDash([4, 4]); ctx.beginPath();
   ctx.arc(px, py, P.L * px2m, Math.PI / 2 - P.th0, Math.PI / 2 + P.th0); ctx.stroke();
   ctx.setLineDash([]);
-  // rod + bob + pivot
+  // thanh + quả nặng + điểm treo
   ctx.strokeStyle = '#334155'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
   ctx.fillStyle = '#4f46e5';
   ctx.beginPath(); ctx.arc(bx, by, 14, 0, 7); ctx.fill();
   ctx.fillStyle = '#0f172a';
   ctx.beginPath(); ctx.arc(px, py, 4, 0, 7); ctx.fill();
-  // readouts
+  // số liệu hiển thị
   const T = 2 * Math.PI * Math.sqrt(P.L / P.g);
   status.textContent = `t=${t.toFixed(1)}s  θ=${(th * 180 / Math.PI).toFixed(1)}°  T≈${T.toFixed(2)}s`;
 }
@@ -109,15 +110,15 @@ function draw() {
 function frame(ts) {
   if (!playing) return;
   const dt = Math.min((ts - last) / 1000, 0.05); last = ts;
-  // substep for stability
+  // chia bước nhỏ để ổn định
   for (let i = 0; i < 4; i++) step(dt / 4);
   t += dt;
   draw();
   raf = requestAnimationFrame(frame);
 }
-function play() { playing = true; document.getElementById('play').textContent = 'Pause';
+function play() { playing = true; document.getElementById('play').textContent = 'Tạm dừng';
   last = performance.now(); raf = requestAnimationFrame(frame); }
-function stop() { playing = false; document.getElementById('play').textContent = 'Play';
+function stop() { playing = false; document.getElementById('play').textContent = 'Phát';
   cancelAnimationFrame(raf); }
 
 function reset() { stop(); th = P.th0; om = 0; t = 0; draw(); }

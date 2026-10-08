@@ -1,34 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head><script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Yêu cầu thất bại';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Paraboloid</title>
+<title>Mặt paraboloid</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden;
                font-family: ui-sans-serif, system-ui, sans-serif;
@@ -93,12 +94,12 @@ addEventListener('unhandledrejection', function(e){
 <body>
 <div id="stage"></div>
 <div id="modes">
-  <button data-m="orbit" class="on" title="Orbit camera (v)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M10.4 21.9a10 10 0 0 0 9.94-15.42"/><path d="M13.5 2.1a10 10 0 0 0-9.84 15.42"/></svg></button>
-  <button data-m="translate" title="Move (g)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg></button>
-  <button data-m="rotate" title="Rotate (r)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
-  <button data-m="scale" title="Scale (s)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 9 15"/><path d="M21 3h-6"/><path d="M21 3v6"/><path d="M3 21l12-12"/><path d="M3 21h6"/><path d="M3 21v-6"/></svg></button>
-  <button data-m="paint" title="Paint patches (p)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></button>
-  <button id="flatbtn" title="Flatten / unfold (f)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6"/><rect x="3" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/><rect x="15" y="9" width="6" height="6"/><rect x="9" y="15" width="6" height="6"/></svg></button>
+  <button data-m="orbit" class="on" title="Xoay camera (v)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M10.4 21.9a10 10 0 0 0 9.94-15.42"/><path d="M13.5 2.1a10 10 0 0 0-9.84 15.42"/></svg></button>
+  <button data-m="translate" title="Di chuyển (g)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg></button>
+  <button data-m="rotate" title="Xoay (r)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+  <button data-m="scale" title="Thu phóng (s)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 9 15"/><path d="M21 3h-6"/><path d="M21 3v6"/><path d="M3 21l12-12"/><path d="M3 21h6"/><path d="M3 21v-6"/></svg></button>
+  <button data-m="paint" title="Tô màu mảng (p)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></button>
+  <button id="flatbtn" title="Trải phẳng / mở ra (f)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6"/><rect x="3" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/><rect x="15" y="9" width="6" height="6"/><rect x="9" y="15" width="6" height="6"/></svg></button>
 
 </div>
 <div id="palette"></div>
@@ -110,35 +111,35 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
-// __PARAMS__ is substituted by the backend's scenario renderer; left
-// unsubstituted (dev/test) the try/catch yields an empty map.
+// __PARAMS__ do bộ kết xuất kịch bản của backend thay thế; nếu để nguyên
+// (dev/test) thì try/catch sẽ cho ra một map rỗng.
 const SCENARIO_PARAMS = (() => {
   try { return __PARAMS__; } catch { return {}; }
 })();
 
 const stage = document.getElementById('stage');
 
-// ---------------- three setup ----------------
+// ---------------- thiết lập three ----------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 stage.appendChild(renderer.domElement);
 
-// Sandboxed srcdoc iframes can't be transparent (opaque white in
-// Chrome), so the doc body paints the board color instead — the host
-// syncs live changes over postMessage. The renderer stays alpha so
-// that color is what shows through.
+// Iframe srcdoc bị sandbox không thể trong suốt (Chrome hiển thị màu
+// trắng đục), nên phần body của tài liệu tự tô màu bảng — host đồng bộ
+// các thay đổi trực tiếp qua postMessage. Renderer vẫn giữ alpha để màu
+// đó lộ ra phía sau.
 const scene = new THREE.Scene();
 const setBoardBg = (c) => {
   document.documentElement.style.background = c;
   document.body.style.background = c;
 };
 window.parent.postMessage({
-  source: 'ai4edu', type: 'ready',
-  artifactId: window.__AI4EDU_ARTIFACT_ID__ }, '*');
+  source: 'magic-board', type: 'ready',
+  artifactId: window.__MAGIC_BOARD_ARTIFACT_ID__ }, '*');
 addEventListener('message', (e) => {
   const d = e.data;
-  if (d && d.source === 'ai4edu' && typeof d.boardBg === 'string' &&
+  if (d && d.source === 'magic-board' && typeof d.boardBg === 'string' &&
       /^#[0-9a-f]{3,8}$/i.test(d.boardBg)) setBoardBg(d.boardBg);
 });
 const camera = new THREE.PerspectiveCamera(
@@ -163,23 +164,34 @@ new ResizeObserver(() => {
 }).observe(stage);
 renderer.setSize(stage.clientWidth, stage.clientHeight);
 
-// Everything transformable lives in one group so the gizmo moves the
-// whole sim as a unit.
+// Mọi thứ có thể biến đổi đều nằm trong một group để gizmo di chuyển
+// toàn bộ mô phỏng như một khối.
 const shape = new THREE.Group();
 scene.add(shape);
 
 
-// ---------------- sim helpers ----------------
+// ---------------- hàm hỗ trợ mô phỏng ----------------
 const TICKS = [];
 const tick = (f) => TICKS.push(f);
 
 const paramsEl = document.getElementById('params');
-// Control keys = normalized labels ('major R' -> 'major_r'); a scenario
-// seeds any control by that key via __PARAMS__. The handler fires once
-// on registration with the initial value, so sims need no separate
-// default-init call.
+// Khoá điều khiển = nhãn đã chuẩn hoá ('major R' -> 'major_r'); kịch bản
+// gieo giá trị cho bất kỳ điều khiển nào bằng khoá đó qua __PARAMS__.
+// Hàm xử lý chạy một lần lúc đăng ký với giá trị ban đầu, nên mô phỏng
+// không cần lời gọi khởi tạo mặc định riêng.
 const pKey = (l) =>
   l.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+// Nhãn hiển thị tiếng Việt, tra theo khoá điều khiển ở trên; các khoá tiếng Anh
+// vẫn là khoá gieo giá trị của kịch bản nên không được đổi.
+const VN_LABEL = {
+  radius: 'Bán kính', height: 'Chiều cao',
+  major_r: 'Bán kính lớn', minor_r: 'Bán kính nhỏ',
+  tilt: 'Nghiêng °', offset: 'Độ lệch', spin: 'Quay °', cut: 'Kiểu cắt',
+  curvature_a: 'Độ cong a', waist_a: 'Eo a', turns: 'Số vòng',
+};
+// Nhãn hiển thị cho các giá trị enum; giá trị gửi vào logic vẫn là mã tiếng Anh.
+const VN_OPT = { full: 'toàn phần', above: 'phía trên', below: 'phía dưới' };
 function param(label, min, max, val, step, fn) {
   const sv = SCENARIO_PARAMS[pKey(label)];
   const init = typeof sv === 'number' && isFinite(sv) ? sv : val;
@@ -187,7 +199,7 @@ function param(label, min, max, val, step, fn) {
   row.className = 'param';
   const name = document.createElement('span');
   name.className = 'pname';
-  name.textContent = label;
+  name.textContent = VN_LABEL[pKey(label)] || label;
   const inp = document.createElement('input');
   inp.type = 'range';
   inp.min = min; inp.max = max; inp.step = step; inp.value = init;
@@ -211,11 +223,12 @@ function pick(label, options, fn) {
   row.className = 'param';
   const name = document.createElement('span');
   name.className = 'pname';
-  name.textContent = label;
+  name.textContent = VN_LABEL[pKey(label)] || label;
   const sel = document.createElement('select');
   for (const opt of options) {
     const o = document.createElement('option');
-    o.value = o.textContent = opt;
+    o.value = opt;
+    o.textContent = VN_OPT[opt] || opt;
     sel.append(o);
   }
   const canonical = options.find(
@@ -228,12 +241,12 @@ function pick(label, options, fn) {
   return row;
 }
 
-// ---------------- flatten ----------------
+// ---------------- trải phẳng ----------------
 let FLAT = 0, FLATTGT = 0;
 const flat = () => FLAT;
 const FLATCHBS = [];
 const onFlatten = (f) => FLATCHBS.push(f);
-const DW = 3.0, DH = 2.0;             // flat domain rect size
+const DW = 3.0, DH = 2.0;             // kích thước hình chữ nhật miền phẳng
 const chart = (u, v) =>
   new THREE.Vector3((u - 0.5) * DW, (v - 0.5) * DH, 0);
 
@@ -245,7 +258,7 @@ function flattenMesh(mesh) {
   FLATMESHES.push({ mesh, pos, uv, base: pos.array.slice() });
 }
 let _flatApplied = -1;
-// Sims that rebuild geometry call this before re-registering flattenMesh.
+// Các mô phỏng dựng lại hình học gọi hàm này trước khi đăng ký lại flattenMesh.
 const clearFlat = () => { FLATMESHES.length = 0; _flatApplied = -1; };
 function applyFlatten() {
   if (FLAT === _flatApplied) return;
@@ -267,10 +280,10 @@ function applyFlatten() {
 }
 
 
-// ---------------- paint ----------------
-// Patch = a set of triangles. 'faces' buckets by rounded face normal;
-// [u,v] tiles the uv domain into a grid of cells. Painting is groups +
-// a material array — no extra meshes, wireframe overlays unaffected.
+// ---------------- tô màu ----------------
+// Mảng (patch) = một tập tam giác. 'faces' gom nhóm theo pháp tuyến mặt
+// đã làm tròn; [u,v] chia miền uv thành một lưới ô. Việc tô màu dùng
+// group + mảng material — không thêm mesh, lớp phủ khung dây không đổi.
 const PALETTE_COLORS = ["#93c5fd","#f9a8d4","#86efac","#fde68a","#fca5a5","#c4b5fd","#67e8f9","#fbbf24"];
 let PAINTING = false;
 let paintColor = PALETTE_COLORS[0];
@@ -325,7 +338,7 @@ function applyPaint(entry) {
   }
   entry.mesh.material = mats;
   geo.clearGroups();
-  // Groups need contiguous runs — one per run of equal material index.
+  // Group cần các đoạn liền nhau — mỗi đoạn ứng với chỉ số material bằng nhau.
   const mi = entry.patchOf.map((key) =>
     entry.painted.has(key) ? colorIdx.get(entry.painted.get(key)) : 0);
   let s = 0;
@@ -350,7 +363,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (!PAINTING || !downXY) return;
   const dx = e.clientX - downXY[0], dy = e.clientY - downXY[1];
   downXY = null;
-  if (dx * dx + dy * dy > 16) return;      // a drag is orbit, not a click
+  if (dx * dx + dy * dy > 16) return;      // kéo rê là xoay camera, không phải nhấp chuột
   const r = renderer.domElement.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(
     ((e.clientX - r.left) / r.width) * 2 - 1,
@@ -366,7 +379,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   applyPaint(entry);
 });
 
-// Swatch palette — shown only in paint mode.
+// Bảng màu mẫu — chỉ hiện ở chế độ tô màu.
 const paletteEl = document.getElementById('palette');
 function addSwatch(col) {
   const b = document.createElement('button');
@@ -382,7 +395,7 @@ function addSwatch(col) {
 PALETTE_COLORS.forEach(addSwatch);
 const erase = document.createElement('button');
 erase.className = 'erase';
-erase.title = 'Erase patch color';
+erase.title = 'Xoá màu mảng';
 erase.addEventListener('click', () => {
   paintColor = null;
   [...paletteEl.children].forEach((x) => x.classList.toggle('on', x === erase));
@@ -390,7 +403,7 @@ erase.addEventListener('click', () => {
 paletteEl.append(erase);
 const reset = document.createElement('button');
 reset.className = 'reset';
-reset.textContent = 'reset';
+reset.textContent = 'Đặt lại';
 reset.addEventListener('click', () => {
   for (const p of PAINTABLES) { p.painted.clear(); applyPaint(p); }
 });
@@ -401,21 +414,21 @@ paletteEl.children[0].classList.add('on');
 
 
 
-// ---------------- flatten toggle ----------------
-// FLATTGT is the target; the RAF loop eases FLAT toward it.
+// ---------------- bật/tắt trải phẳng ----------------
+// FLATTGT là giá trị đích; vòng lặp RAF đưa FLAT tiến dần tới đó.
 const flatBtnEl = document.getElementById('flatbtn');
 function toggleFlat() {
   FLATTGT = FLATTGT ? 0 : 1;
   flatBtnEl.classList.toggle('on', FLATTGT === 1);
-  flatBtnEl.title = FLATTGT ? 'Refold (f)' : 'Flatten / unfold (f)';
+  flatBtnEl.title = FLATTGT ? 'Gấp lại (f)' : 'Trải phẳng / mở ra (f)';
 }
 flatBtnEl.addEventListener('click', toggleFlat);
 addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'f' && !e.repeat) toggleFlat();
 });
-if (SCENARIO_PARAMS.flat) toggleFlat();   // scenario: start unfolded
+if (SCENARIO_PARAMS.flat) toggleFlat();   // kịch bản: bắt đầu ở trạng thái trải phẳng
 
-// ---------------- sim ----------------
+// ---------------- mô phỏng ----------------
 
 const mat = new THREE.MeshStandardMaterial({
   color: 0x6ee7b7, metalness: 0.05, roughness: 0.6,
@@ -437,7 +450,7 @@ function build(a) {
     pts.push(new THREE.Vector2(r, a * r * r));
   }
   surf = new THREE.Mesh(new THREE.LatheGeometry(pts, 56), mat);
-  // Coarser lathe as a visible meridian/parallel net.
+  // Lưới lathe thô hơn để thấy rõ các đường kinh tuyến/vĩ tuyến.
   wire = new THREE.Mesh(new THREE.LatheGeometry(pts, 14), wireMat);
   shape.add(surf, wire);
   paintable(surf, [8, 4]);
@@ -448,14 +461,15 @@ function build(a) {
 param('curvature a', 0.2, 2.5, 0.9, 0.05, build);
 
 
-// ---------------- transform gizmo ----------------
-// r169+ API: TransformControls extends Controls; the visible gizmo is a
-// separate helper added to the scene. Starts detached — 'move' reveals it.
+// ---------------- gizmo biến đổi ----------------
+// API từ r169+: TransformControls kế thừa Controls; gizmo nhìn thấy được
+// là một helper riêng được thêm vào scene. Ban đầu nó không gắn vào đâu —
+// chế độ 'move' sẽ hiện nó ra.
 const gizmo = new TransformControls(camera, renderer.domElement);
 scene.add(gizmo.getHelper());
 gizmo.size = 0.8;
 gizmo.addEventListener('dragging-changed', (e) => {
-  controls.enabled = !e.value;   // never fight OrbitControls for a drag
+  controls.enabled = !e.value;   // không tranh chấp với OrbitControls khi kéo
 });
 const modeButtons = [...document.querySelectorAll('#modes button[data-m]')];
 let curMode = 'orbit';
@@ -464,8 +478,8 @@ function setMode(m) {
   modeButtons.forEach((b) => b.classList.toggle('on', b.dataset.m === m));
   gizmo.detach();
   if (m === 'translate' || m === 'rotate' || m === 'scale') {
-    // Grab mode retargets the gizmo at the slice plane (scale stays
-    // on the shape — scaling a plane is meaningless).
+    // Chế độ nắm bắt hướng gizmo sang mặt phẳng cắt (riêng scale vẫn
+    // áp lên hình — phóng tỉ lệ một mặt phẳng là vô nghĩa).
     const target =
       typeof PLANE_GRAB !== 'undefined' && PLANE_GRAB && m !== 'scale'
         ? planeGroup : shape;

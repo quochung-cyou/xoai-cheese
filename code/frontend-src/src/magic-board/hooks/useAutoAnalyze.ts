@@ -1,12 +1,12 @@
 /**
- * Analyze pipeline — suggestion model, no automatic requests.
+ * Luồng phân tích — chỉ gợi ý, không tự động gửi yêu cầu.
  *
- * Ported from ai4edu's `hooks/useAutoAnalyze.ts` with the server call swapped
- * for a direct browser call to the model endpoint.
+ * Chuyển từ `hooks/useAutoAnalyze.ts` của ai4edu, thay lời gọi máy chủ bằng
+ * lời gọi trực tiếp từ trình duyệt tới endpoint của mô hình.
  *
- * onChange -> 2s idle debounce -> per-artifact staleness check ->
- * 'suggested' status -> the user triggers analyzeNow() -> export PNG ->
- * analyzeSketch() -> latest-wins versioning.
+ * onChange -> hoãn 2 giây khi rảnh -> kiểm tra độ cũ theo từng kết quả ->
+ * trạng thái 'suggested' -> người dùng gọi analyzeNow() -> xuất PNG ->
+ * analyzeSketch() -> phiên bản nào mới nhất thì thắng.
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { exportToBlob } from '@excalidraw/excalidraw';
@@ -25,16 +25,16 @@ export interface Snapshot {
   elements: readonly ExcalidrawElement[];
   appState: AppState;
   files: BinaryFiles;
-  /** Frame the snapshot came from — becomes the artifact's source_frame_id. */
+  /** Khung chứa ảnh chụp — trở thành source_frame_id của kết quả. */
   frameId?: string;
-  /** Correlates this run's pending placeholder with its result when several
-   *  analyses run in parallel. Assigned by the caller. */
+  /** Nối phần giữ chỗ đang chờ của lượt chạy này với kết quả của nó khi có
+   *  nhiều lượt phân tích chạy song song. Do bên gọi gán. */
   runId?: string;
 }
 
-/** Content hash of the elements an artifact was generated from:
- *  id:version:nonce for each stored source id (missing ids flag as
- *  "deleted"). Cheap — no PNG. */
+/** Hash nội dung của các phần tử đã sinh ra một kết quả:
+ *  id:version:nonce cho từng id nguồn đã lưu (id thiếu được đánh dấu là
+ *  "đã xóa"). Rẻ — không cần PNG. */
 function artifactSourceHash(
   artifact: Artifact,
   elements: readonly ExcalidrawElement[],
@@ -50,16 +50,16 @@ function artifactSourceHash(
   return parts.join(',');
 }
 
-/** Ids the artifact should record as its source: the analyzed sketch elements
- *  minus frame containers. */
+/** Các id mà kết quả nên ghi làm nguồn: những phần tử phác thảo đã phân tích
+ *  trừ đi các khung chứa. */
 function sourceIdsFor(sketch: ExcalidrawElement[]): string[] {
   return sketch
     .filter((el) => el.type !== 'frame' && el.type !== 'magicframe')
     .map((el) => el.id);
 }
 
-/** PNG bytes -> base64, chunked so a large sketch can't blow the argument
- *  limit of String.fromCharCode. */
+/** Byte PNG -> base64, chia khối để bản phác thảo lớn không vượt giới hạn
+ *  đối số của String.fromCharCode. */
 function toBase64(bytes: Uint8Array): string {
   let binary = '';
   const CHUNK = 0x8000;
@@ -70,9 +70,9 @@ function toBase64(bytes: Uint8Array): string {
 }
 
 interface Options {
-  /** Read at call time so the hook never holds a stale key. */
+  /** Đọc tại thời điểm gọi để hook không giữ khóa cũ. */
   getConfig: () => LLMConfig;
-  /** Artifacts drive staleness. */
+  /** Kết quả quyết định việc kiểm tra độ cũ. */
   artifacts: Artifact[];
   onResult: (artifact: Artifact, snapshot: Snapshot) => void;
   onError: (message: string) => void;
@@ -88,14 +88,14 @@ export function useAutoAnalyze({
 }: Options) {
   const timerRef = useRef<number | null>(null);
   const snapshotRef = useRef<Snapshot | null>(null);
-  /** In-flight run count — analyses run in parallel; the status settles only
-   *  when the last one ends. */
+  /** Số lượt chạy đang thực hiện — các phân tích chạy song song; trạng thái
+   *  chỉ chốt lại khi lượt cuối cùng kết thúc. */
   const inFlightRef = useRef(0);
   const dirtyRef = useRef(false);
   const hadErrorRef = useRef(false);
   const abortsRef = useRef<Set<AbortController>>(new Set());
-  /** artifactId -> source-content hash captured at the last successful
-   *  analyze (or seeded lazily on first suggest). */
+  /** artifactId -> hash nội dung nguồn ghi nhận ở lần phân tích thành công
+   *  gần nhất (hoặc nạp dần ở lần gợi ý đầu tiên). */
   const analyzedHashesRef = useRef<Map<string, string>>(new Map());
 
   const cbRef = useRef({ onResult, onError, setStatus, getConfig });
@@ -103,7 +103,7 @@ export function useAutoAnalyze({
   const artifactsRef = useRef(artifacts);
   artifactsRef.current = artifacts;
 
-  /** Cancel everything in flight (unmount / manual cancel). */
+  /** Hủy mọi thứ đang chạy (gỡ component / người dùng hủy). */
   const abortAll = useCallback(() => {
     for (const a of abortsRef.current) a.abort();
     abortsRef.current.clear();
@@ -117,17 +117,17 @@ export function useAutoAnalyze({
     [abortAll],
   );
 
-  /** @param override Snapshot to analyze instead of the last onChange one
-   *  (manual "analyze selection" / "analyze frame" uses this). */
+  /** @param override Ảnh chụp cần phân tích thay cho ảnh chụp onChange gần
+   *  nhất (dùng cho "phân tích phần chọn" / "phân tích khung"). */
   const fire = useCallback(async (override?: Snapshot) => {
     const snapshot = override ?? snapshotRef.current;
     if (!snapshot) return;
-    // Generated output never goes back into an analysis request.
+    // Kết quả đã tạo không bao giờ được đưa ngược trở lại yêu cầu phân tích.
     const sketchElements = snapshot.elements.filter(
       (el) => !el.isDeleted && !isGeneratedElement(el),
     );
     if (!sketchElements.length) {
-      cbRef.current.onError('Nothing to analyze — draw something first.');
+      cbRef.current.onError('Không có gì để phân tích — hãy vẽ gì đó trước.');
       return;
     }
 
@@ -135,7 +135,7 @@ export function useAutoAnalyze({
     if (!cfg.api_key.trim() || !cfg.model.trim()) {
       cbRef.current.setStatus('error');
       cbRef.current.onError(
-        'No model configured yet. Open Settings and fill in the endpoint, model and API key.',
+        'Chưa cấu hình mô hình. Hãy mở Cài đặt và điền endpoint, mô hình cùng khóa API.',
       );
       return;
     }
@@ -156,7 +156,7 @@ export function useAutoAnalyze({
       if (!blob) return;
       imageBase64 = toBase64(new Uint8Array(await blob.arrayBuffer()));
     } catch {
-      cbRef.current.onError('Could not export the sketch to an image.');
+      cbRef.current.onError('Không xuất được bản phác thảo thành ảnh.');
       return;
     }
 
@@ -166,10 +166,9 @@ export function useAutoAnalyze({
     inFlightRef.current += 1;
     cbRef.current.setStatus('analyzing');
     try {
-      // Fast path first: one cheap classify call. A clear match instantiates
-      // the template locally, so nothing has to generate a simulation — which
-      // is what keeps this quick and stops a reasoning model from burning its
-      // whole budget thinking.
+      // Ưu tiên đường nhanh: một lời gọi phân loại rẻ. Nếu khớp rõ ràng thì
+      // dựng template ngay tại chỗ, không cần sinh mô phỏng — nhờ vậy thao tác
+      // này nhanh và không để mô hình suy luận đốt hết hạn mức vào việc nghĩ.
       let result: Artifact | null = null;
       if (cfg.scenario_fast_path !== false) {
         try {
@@ -180,8 +179,8 @@ export function useAutoAnalyze({
             abort.signal,
           );
         } catch (e) {
-          // Classification is an optimisation — never let it sink the request
-          // when the user has explicitly asked for it to be authoritative.
+          // Phân loại chỉ là bước tối ưu — đừng để nó làm hỏng yêu cầu khi
+          // người dùng đã yêu cầu rõ rằng nó là bắt buộc.
           if (abort.signal.aborted) throw e;
           if (cfg.scenario_fast_path === true) throw e;
           result = null;
@@ -189,8 +188,8 @@ export function useAutoAnalyze({
       }
 
       if (result) {
-        // A template match is already placed; its source ids still drive the
-        // "board changed since analyze" staleness check.
+        // Template khớp đã được đặt sẵn; id nguồn của nó vẫn quyết định việc
+        // kiểm tra "bảng đã thay đổi kể từ lần phân tích".
         analyzedHashesRef.current.set(
           result.id,
           artifactSourceHash(
@@ -216,10 +215,11 @@ export function useAutoAnalyze({
         cbRef.current.onResult(generated, snapshot);
       }
     } catch (e) {
-      // A user cancel rejects with AbortError — never an error state.
+      // Người dùng hủy thì promise bị từ chối với AbortError — không bao giờ
+      // coi đó là trạng thái lỗi.
       if (!abort.signal.aborted) {
         hadErrorRef.current = true;
-        cbRef.current.onError(e instanceof Error ? e.message : 'Analysis failed');
+        cbRef.current.onError(e instanceof Error ? e.message : 'Phân tích thất bại');
       }
     } finally {
       abortsRef.current.delete(abort);
@@ -234,9 +234,9 @@ export function useAutoAnalyze({
     }
   }, []);
 
-  /** Per-artifact staleness after the idle debounce: an artifact is stale
-   *  when the elements it was generated from changed (or were deleted) since
-   *  its analysis. Before any artifact exists, any change suggests. */
+  /** Kiểm tra độ cũ theo từng kết quả sau khi hết thời gian hoãn: một kết quả
+   *  bị coi là cũ khi các phần tử đã sinh ra nó thay đổi (hoặc bị xóa) kể từ
+   *  lần phân tích của nó. Khi chưa có kết quả nào, mọi thay đổi đều gợi ý. */
   const suggest = useCallback(() => {
     const snapshot = snapshotRef.current;
     if (!snapshot || snapshot.elements.length === 0) return;
@@ -280,8 +280,8 @@ export function useAutoAnalyze({
     [suggest],
   );
 
-  /** Manual trigger: pass a snapshot to analyze a selection or a frame —
-   *  always forced, a click bypasses dedupe. */
+  /** Kích hoạt thủ công: truyền một ảnh chụp để phân tích phần đang chọn hoặc
+   *  một khung — luôn bắt buộc, một cú bấm sẽ bỏ qua bước chống trùng. */
   const analyzeNow = useCallback(
     (override?: Snapshot) => {
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -290,14 +290,14 @@ export function useAutoAnalyze({
     [fire],
   );
 
-  /** Cancel every in-flight analyze request (no-op when idle). Status settles
-   *  in fire()'s finally once the last fetch rejects. */
+  /** Hủy mọi yêu cầu phân tích đang chạy (không làm gì khi đang rảnh). Trạng
+   *  thái chốt lại trong khối finally của fire() khi fetch cuối cùng bị từ chối. */
   const cancel = useCallback(() => {
     abortAll();
   }, [abortAll]);
 
-  /** Seed the staleness baseline for artifacts restored from storage so a
-   *  reloaded board doesn't immediately look stale. */
+  /** Nạp mốc so sánh độ cũ cho các kết quả khôi phục từ bộ nhớ, để bảng vừa
+   *  tải lại không trông như đã cũ ngay. */
   const seedHashes = useCallback(
     (loaded: Artifact[], elements: readonly ExcalidrawElement[]) => {
       for (const a of loaded) {

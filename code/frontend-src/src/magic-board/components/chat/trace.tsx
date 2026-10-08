@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import type { RefineEditCard, RefineRun } from '../../lib/types';
 import { stageLabel } from './reducer';
 
-/** Shimmer sweep for live status labels. */
+/** Vệt sáng lấp lánh (shimmer) cho nhãn trạng thái đang chạy. */
 const SHIMMER_TEXT: CSSProperties = {
   backgroundImage:
     'linear-gradient(90deg, var(--muted-foreground) 35%, var(--foreground) 50%, var(--muted-foreground) 65%)',
@@ -13,7 +13,7 @@ const SHIMMER_TEXT: CSSProperties = {
   animation: 'shimmer-text 1.4s linear infinite',
 };
 
-/** Tiny agent glyph — marks assistant turns without a full avatar column. */
+/** Glyph tác nhân nhỏ — đánh dấu lượt của trợ lý mà không cần cả cột ảnh đại diện. */
 export function AiGlyph() {
   return (
     <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center text-primary">
@@ -22,7 +22,7 @@ export function AiGlyph() {
   );
 }
 
-/** Whole-seconds ticker for the thinking phase. */
+/** Đồng hồ đếm giây nguyên cho giai đoạn suy nghĩ. */
 function useThinkingSeconds(active: boolean, startedAt?: number): number {
   const [secs, setSecs] = useState(0);
   useEffect(() => {
@@ -35,7 +35,7 @@ function useThinkingSeconds(active: boolean, startedAt?: number): number {
   return Math.floor(secs);
 }
 
-/** Pixel-grid loader for long-running work (ported from ai4edu's UI kit). */
+/** Bộ tải dạng lưới điểm ảnh cho tác vụ chạy lâu (chuyển từ bộ UI của ai4edu). */
 const chevron = Array.from({ length: 9 }, (_, i) => {
   const r = Math.floor(i / 3);
   const c = i % 3;
@@ -67,8 +67,8 @@ function PixelLoader({ label, round }: { label: string; round: boolean }) {
   );
 }
 
-/** Collapsible thinking trace — expands while streaming, settles to a
- *  'Thought for Ns' row that stays expandable on completed messages. */
+/** Dấu vết suy nghĩ có thể thu gọn — mở ra trong lúc truyền phát, rồi thu lại thành
+ *  dòng 'Đã suy nghĩ Ns' vẫn mở rộng được ở tin nhắn đã hoàn tất. */
 export function Reasoning({
   active,
   text,
@@ -96,7 +96,7 @@ export function Reasoning({
         {active ? (
           <>
             <span className="bg-clip-text font-medium text-transparent" style={SHIMMER_TEXT}>
-              Thinking
+              Đang suy nghĩ
             </span>
             {secs != null && secs > 0 && (
               <span className="font-mono text-[10px] tabular-nums">{secs}s</span>
@@ -104,7 +104,7 @@ export function Reasoning({
           </>
         ) : (
           <span className="font-medium">
-            {doneSecs != null ? `Thought for ${doneSecs}s` : 'Thought process'}
+            {doneSecs != null ? `Đã suy nghĩ ${doneSecs}s` : 'Quá trình suy nghĩ'}
           </span>
         )}
         <ChevronDown
@@ -130,8 +130,8 @@ export function Reasoning({
   );
 }
 
-/** Streams narration word-by-word — each new word resolves out of blur and a
- *  block caret trails the stream. */
+/** Truyền phát lời dẫn từng từ một — mỗi từ mới hiện ra từ vết mờ và một
+ *  con trỏ dạng khối bám theo dòng chảy. */
 function StreamingNarration({ text, caret }: { text: string; caret: boolean }) {
   const parts = text.split(/(\s+)/);
   return (
@@ -155,7 +155,7 @@ function StreamingNarration({ text, caret }: { text: string; caret: boolean }) {
   );
 }
 
-/** One-line edit row; expands to the search/replace diff. */
+/** Một dòng chỉnh sửa; mở rộng ra thành diff tìm/thay thế. */
 function EditRow({ card }: { card: RefineEditCard }) {
   const [open, setOpen] = useState(false);
   const icon =
@@ -168,12 +168,12 @@ function EditRow({ card }: { card: RefineEditCard }) {
     );
   const label =
     card.status === 'locating'
-      ? 'locating code…'
+      ? 'đang định vị mã…'
       : card.status === 'patching'
-        ? `found at line ${card.line} — patching…`
+        ? `thấy ở dòng ${card.line} — đang vá…`
         : card.status === 'applied'
-          ? `applied${card.line ? ` at line ${card.line}` : ''}`
-          : `failed: ${card.reason ?? 'no match'}`;
+          ? `đã áp dụng${card.line ? ` ở dòng ${card.line}` : ''}`
+          : `thất bại: ${card.reason ?? 'không khớp'}`;
   const hasDiff = Boolean(card.search || card.replace);
   return (
     <div style={{ animation: 'fade-up 320ms ease-out both' }}>
@@ -189,7 +189,7 @@ function EditRow({ card }: { card: RefineEditCard }) {
       >
         {icon}
         <span className="truncate">
-          <span className="font-medium text-foreground/80">Edit {card.index}</span>
+          <span className="font-medium text-foreground/80">Sửa {card.index}</span>
           <span className="mx-1 text-border">·</span>
           {label}
         </span>
@@ -218,7 +218,7 @@ function EditRow({ card }: { card: RefineEditCard }) {
   );
 }
 
-/** Live refine run — a lean trace, not a card of cards. */
+/** Lần tinh chỉnh trực tiếp — một dấu vết gọn gàng, không phải thẻ lồng trong thẻ. */
 export function AgentRun({ run }: { run: RefineRun }) {
   const thinkingActive =
     run.stage === 'streaming' && !run.narration && run.edits.length === 0;
@@ -250,7 +250,7 @@ export function AgentRun({ run }: { run: RefineRun }) {
         )}
         {run.rewriteLines != null && (
           <p className="text-xs text-muted-foreground">
-            Full rewrite — {run.rewriteLines} lines written so far
+            Viết lại toàn bộ — đã ghi {run.rewriteLines} dòng
           </p>
         )}
       </div>

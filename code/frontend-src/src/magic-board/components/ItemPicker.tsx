@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Atom,
+  BookOpen,
   Box,
   Brain,
   HeartPulse,
@@ -23,6 +24,7 @@ import type { CachedOutput } from '../lib/cache';
 const ICONS = {
   Box,
   LineChart,
+  BookOpen,
   Network,
   Brain,
   Atom,
@@ -32,27 +34,27 @@ const ICONS = {
 type Tab = 'catalog' | CatalogCategoryId | 'previous';
 
 function fmtWhen(iso?: string): string {
-  if (!iso) return 'not spawned yet';
+  if (!iso) return 'chưa đặt lên bảng';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 'not spawned yet';
+  if (Number.isNaN(d.getTime())) return 'chưa đặt lên bảng';
   const mins = Math.round((Date.now() - d.getTime()) / 60000);
-  if (mins < 1) return 'spawned just now';
-  if (mins < 60) return `spawned ${mins}m ago`;
+  if (mins < 1) return 'vừa đặt lên bảng';
+  if (mins < 60) return `đặt lên bảng ${mins} phút trước`;
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `spawned ${hours}h ago`;
-  return `spawned ${Math.round(hours / 24)}d ago`;
+  if (hours < 24) return `đặt lên bảng ${hours} giờ trước`;
+  return `đặt lên bảng ${Math.round(hours / 24)} ngày trước`;
 }
 
 /**
- * Floating "add" button + item picker.
+ * Nút "thêm" nổi + bộ chọn mục.
  *
- * Pick an item and it spawns straight onto the canvas with its default
- * settings — no form, no confirm. Everything in the catalog is a
- * template-backed artifact that carries its own controls once on the board, so
- * the picker only has to answer "which one".
+ * Chọn một mục là nó được đặt thẳng lên bảng vẽ với cài đặt mặc định — không
+ * có biểu mẫu, không cần xác nhận. Mọi thứ trong danh mục đều là artifact dựa
+ * trên mẫu và tự mang theo các điều khiển của mình khi đã ở trên bảng, nên bộ
+ * chọn chỉ cần trả lời câu hỏi "mục nào".
  *
- * The "Previous" tab lists results the model already produced (the output
- * cache) so they can be dropped onto any board too.
+ * Tab "Đã tạo" liệt kê những kết quả mà mô hình (model) đã tạo ra (bộ nhớ đệm
+ * kết quả) để chúng cũng có thể được đặt lên bất kỳ bảng nào.
  */
 export default function ItemPicker({
   open,
@@ -69,7 +71,7 @@ export default function ItemPicker({
   onClose: () => void;
   onSpawnItem: (item: CatalogItem) => Promise<void>;
   previous: CachedOutput[];
-  /** Total size of the output cache, for the footer hint. */
+  /** Tổng dung lượng của bộ nhớ đệm kết quả, dùng cho gợi ý ở chân hộp thoại. */
   previousBytes: number;
   onSpawnPrevious: (entry: CachedOutput) => Promise<void>;
   onSpawnAllPrevious: () => void;
@@ -82,7 +84,7 @@ export default function ItemPicker({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fresh state each time it opens.
+  // Trạng thái mới mỗi lần mở.
   useEffect(() => {
     if (open) {
       setQuery('');
@@ -102,8 +104,8 @@ export default function ItemPicker({
 
   const q = query.trim().toLowerCase();
 
-  /** Items for the active tab, filtered by the search box. Searching spans the
-   *  whole catalog regardless of tab, which is what a user expects. */
+  /** Các mục của tab đang mở, đã lọc theo ô tìm kiếm. Tìm kiếm quét toàn bộ
+   *  danh mục bất kể tab nào, đúng như người dùng mong đợi. */
   const items = useMemo<CatalogItem[]>(() => {
     const pool =
       tab === 'catalog' || q
@@ -118,7 +120,7 @@ export default function ItemPicker({
     );
   }, [tab, q]);
 
-  /** Group by category when we're showing the mixed list. */
+  /** Nhóm theo danh mục khi đang hiển thị danh sách trộn. */
   const groups = useMemo(() => {
     if (tab !== 'catalog' && !q) return null;
     return CATALOG.map((c) => ({
@@ -138,7 +140,8 @@ export default function ItemPicker({
 
   if (!open) return null;
 
-  /** Run a spawn, keeping the dialog open on failure so the message is read. */
+  /** Chạy việc đặt lên bảng, giữ hộp thoại mở khi thất bại để người dùng đọc
+   *  được thông báo. */
   const run = async (fn: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
@@ -155,12 +158,13 @@ export default function ItemPicker({
 
   const spawnItem = (item: CatalogItem) => void run(() => onSpawnItem(item));
 
-  /** Anatomy rows accept free text, so expose the query as a focus value. */
+  /** Các dòng giải phẫu nhận văn bản tự do, nên đưa truy vấn ra làm giá trị
+   *  focus. */
   const spawnFocus = (focus: string) =>
     void run(() =>
       onSpawnItem({
         id: `anatomy-focus:${focus || 'body'}`,
-        label: focus || 'whole body',
+        label: focus || 'toàn thân',
         scenario: 'anatomy_3d',
         params: { focus, systems: [], isolate: true },
         hint: '',
@@ -177,23 +181,23 @@ export default function ItemPicker({
       }}
     >
       <div
-        className="flex h-[70vh] w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+        className="flex h-[78vh] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
         style={{ animation: 'fade-up 160ms ease-out both' }}
       >
-        {/* Header */}
+        {/* Tiêu đề */}
         <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <LayoutGrid size={14} className="text-primary" />
-          <h2 className="text-sm font-semibold">Add to board</h2>
+          <h2 className="text-sm font-semibold">Thêm vào bảng</h2>
           <button
             onClick={onClose}
             className="ml-auto flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title="Close"
+            title="Đóng"
           >
             <X size={14} />
           </button>
         </div>
 
-        {/* Search */}
+        {/* Tìm kiếm */}
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
           <Search size={13} className="shrink-0 text-muted-foreground" />
           <input
@@ -203,7 +207,7 @@ export default function ItemPicker({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !busy) {
-                // Enter spawns the top hit — the fastest possible path.
+                // Enter đặt mục đầu tiên lên bảng — đường đi nhanh nhất có thể.
                 if (tab === 'previous') {
                   if (previousItems[0]) void run(() => onSpawnPrevious(previousItems[0]!));
                 } else if (items[0]) {
@@ -211,7 +215,7 @@ export default function ItemPicker({
                 }
               }
             }}
-            placeholder="Search — sphere, heart, pendulum, equation…"
+            placeholder="Tìm kiếm — hình cầu, trái tim, con lắc, phương trình…"
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/70"
           />
           {query && (
@@ -221,17 +225,17 @@ export default function ItemPicker({
                 inputRef.current?.focus();
               }}
               className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-              title="Clear"
+              title="Xóa"
             >
               <X size={12} />
             </button>
           )}
         </div>
 
-        {/* Category rail */}
+        {/* Dải danh mục */}
         <div className="mb-scroll flex gap-1 overflow-x-auto border-b border-border px-2.5 py-2">
           <TabChip active={onCatalogTab} onClick={() => { setTab('catalog'); setQuery(''); }}>
-            All
+            Tất cả
           </TabChip>
           {CATALOG.map((c) => {
             const Icon = ICONS[c.icon];
@@ -257,11 +261,11 @@ export default function ItemPicker({
             }}
           >
             <Package size={11} />
-            Previous{previous.length ? ` (${previous.length})` : ''}
+            Đã tạo{previous.length ? ` (${previous.length})` : ''}
           </TabChip>
         </div>
 
-        {/* Body */}
+        {/* Nội dung */}
         <div className="mb-scroll min-h-0 flex-1 overflow-y-auto p-2.5">
           {error && (
             <p className="mb-2 rounded-lg bg-destructive/10 px-2.5 py-2 text-[11px] leading-snug text-destructive">
@@ -275,8 +279,8 @@ export default function ItemPicker({
                 icon={<Package size={16} />}
                 text={
                   previous.length
-                    ? 'No previous result matches that search.'
-                    : 'Nothing yet. Analyze a sketch and the result shows up here, ready to drop onto any board.'
+                    ? 'Không có kết quả trước đây nào khớp với tìm kiếm đó.'
+                    : 'Chưa có gì. Hãy Phân tích một bản phác thảo, kết quả sẽ hiện ở đây và sẵn sàng để đặt lên bất kỳ bảng nào.'
                 }
               />
             ) : (
@@ -288,10 +292,10 @@ export default function ItemPicker({
                   }}
                   disabled={busy}
                   className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-2 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
-                  title="Drop every generated result onto this board"
+                  title="Đặt mọi kết quả đã tạo lên bảng này"
                 >
                   <Layers size={12} />
-                  Spawn all ({previousItems.length})
+                  Đặt lên bảng tất cả ({previousItems.length})
                 </button>
                 {previousItems.map((p) => (
                   <div
@@ -311,7 +315,7 @@ export default function ItemPicker({
                           {p.artifact.title}
                         </span>
                         <span className="block truncate text-[10px] text-muted-foreground">
-                          {p.artifact.kind === 'elements' ? 'diagram' : 'sim'} ·{' '}
+                          {p.artifact.kind === 'elements' ? 'sơ đồ' : 'mô phỏng'} ·{' '}
                           {fmtWhen(p.spawnedAt)}
                         </span>
                       </span>
@@ -319,7 +323,7 @@ export default function ItemPicker({
                     <button
                       onClick={() => onRemovePrevious(p.id)}
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-                      title="Remove from the list"
+                      title="Xóa khỏi danh sách"
                     >
                       <Trash2 size={11} />
                     </button>
@@ -330,16 +334,16 @@ export default function ItemPicker({
           ) : items.length === 0 ? (
             <Empty
               icon={<Search size={16} />}
-              text={`Nothing matches “${query}”. Try sphere, knot, pendulum, matrix, heart…`}
+              text={`Không có kết quả nào khớp với “${query}”. Thử hình cầu, nút thắt, con lắc, ma trận, trái tim…`}
             />
           ) : (
             <>
-              {/* Free-text focus for the anatomy viewer, since it is the one
-                  item whose param is an open-ended structure name. */}
+              {/* Văn bản tự do cho phần focus của trình xem giải phẫu, vì đây
+                  là mục duy nhất có tham số là tên cấu trúc mở. */}
               {tab === 'biology' && !q && (
                 <div className="mb-2 rounded-lg border border-border bg-muted/40 p-2">
                   <p className="mb-1.5 px-0.5 text-[10px] font-medium text-muted-foreground">
-                    Focus a structure (or pick a preset)
+                    Tập trung vào một cấu trúc (hoặc chọn mẫu có sẵn)
                   </p>
                   <div className="flex flex-wrap gap-1">
                     {ANATOMY_QUICK.map((s) => (
@@ -354,7 +358,7 @@ export default function ItemPicker({
                     ))}
                   </div>
                   <p className="mt-1.5 px-0.5 text-[10px] leading-snug text-muted-foreground/80">
-                    Or type any structure above and press Enter — e.g. “femur”, “aorta”, “retina”.
+                    Hoặc gõ bất kỳ cấu trúc nào ở trên rồi nhấn Enter — ví dụ: “xương đùi” (femur), “động mạch chủ” (aorta), “võng mạc” (retina).
                   </p>
                 </div>
               )}
@@ -365,14 +369,18 @@ export default function ItemPicker({
                     <p className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                       {group.category.label}
                     </p>
-                    {group.items.map((i) => (
-                      <ItemRow key={i.id} item={i} busy={busy} onPick={spawnItem} />
-                    ))}
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {group.items.map((i) => (
+                        <ItemCard key={i.id} item={i} busy={busy} onPick={spawnItem} />
+                      ))}
+                    </div>
                   </div>
                 ) : (
-                  group.items.map((i) => (
-                    <ItemRow key={i.id} item={i} busy={busy} onPick={spawnItem} />
-                  ))
+                  <div key="filtered-items" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {group.items.map((i) => (
+                      <ItemCard key={i.id} item={i} busy={busy} onPick={spawnItem} />
+                    ))}
+                  </div>
                 ),
               )}
             </>
@@ -383,19 +391,19 @@ export default function ItemPicker({
           {tab === 'previous' && previous.length > 0 ? (
             <>
               <p className="text-[10px] text-muted-foreground">
-                {previous.length} saved · {Math.round(previousBytes / 1024)} KB
+                {previous.length} đã lưu · {Math.round(previousBytes / 1024)} KB
               </p>
               <button
                 onClick={onClearPrevious}
                 className="ml-auto rounded-md px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                title="Delete every saved result"
+                title="Xóa mọi kết quả đã lưu"
               >
-                Clear all
+                Xóa tất cả
               </button>
             </>
           ) : (
             <p className="text-[10px] text-muted-foreground">
-              Items spawn with default settings — adjust them inside the simulation.
+              Các mục được đặt lên bảng với cài đặt mặc định — hãy điều chỉnh chúng bên trong mô phỏng.
             </p>
           )}
           {busy && <Loader2 size={12} className="ml-auto animate-spin text-primary" />}
@@ -429,7 +437,7 @@ function TabChip({
   );
 }
 
-function ItemRow({
+function ItemCard({
   item,
   busy,
   onPick,
@@ -442,17 +450,40 @@ function ItemRow({
     <button
       onClick={() => onPick(item)}
       disabled={busy}
-      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted disabled:opacity-40"
-      title={`Spawn ${item.label}`}
+      className="group overflow-hidden rounded-xl border border-border bg-card text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md disabled:translate-y-0 disabled:opacity-40"
+      title={`Đặt ${item.label} lên bảng`}
     >
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <Plus size={12} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium">{item.label}</span>
-        <span className="block truncate text-[10px] text-muted-foreground">{item.hint}</span>
+      <ItemPreview item={item} />
+      <span className="flex items-start gap-2 p-2.5">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-semibold">{item.label}</span>
+          <span className="mt-0.5 block line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+            {item.hint}
+          </span>
+        </span>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+          <Plus size={12} />
+        </span>
       </span>
     </button>
+  );
+}
+
+function ItemPreview({ item }: { item: CatalogItem }) {
+  const category = CATALOG.find((entry) => entry.items.includes(item));
+  const Icon = category ? ICONS[category.icon] : LayoutGrid;
+
+  return (
+    <span className="relative flex h-20 items-center justify-center overflow-hidden bg-gradient-to-br from-primary/5 via-muted/70 to-primary/15">
+      <span className="absolute -right-5 -top-6 h-20 w-20 rounded-full border border-primary/10" />
+      <span className="absolute -bottom-8 -left-5 h-20 w-20 rounded-full bg-primary/5" />
+      <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/15 bg-card/80 text-primary shadow-sm backdrop-blur">
+        <Icon size={22} strokeWidth={1.6} />
+      </span>
+      <span className="absolute bottom-1.5 right-2 max-w-[75%] truncate rounded-full bg-card/80 px-1.5 py-0.5 font-mono text-[8px] text-muted-foreground backdrop-blur">
+        {item.scenario.replaceAll('_', ' ')}
+      </span>
+    </span>
   );
 }
 

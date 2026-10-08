@@ -1,24 +1,25 @@
 /**
- * Scenario registry — the ai4edu "quick-render" catalog, ported to run with no
- * backend.
+ * Sổ đăng ký kịch bản — danh mục "kết xuất nhanh" của ai4edu, được chuyển sang
+ * để chạy không cần backend.
  *
- * In ai4edu this was `backend/app/scenarios.py`: a file-based registry that
- * discovered `<id>.json` (metadata + param spec) next to `<id>.html` (a
- * template with `__PARAMS__`), then normalized params, rendered the template,
- * and derived a title/analysis. Everything server-side is gone here, so the
- * same pipeline runs in the browser against files in `public/mb-assets/`.
+ * Trong ai4edu đây là `backend/app/scenarios.py`: một sổ đăng ký dựa trên tệp,
+ * tìm các tệp `<id>.json` (metadata + đặc tả params) bên cạnh `<id>.html` (một
+ * mẫu có `__PARAMS__`), rồi chuẩn hóa params, kết xuất mẫu, và suy ra
+ * tiêu đề/phân tích. Mọi thứ phía máy chủ đều không còn ở đây, nên đúng đường
+ * ống đó chạy trong trình duyệt với các tệp trong `public/mb-assets/`.
  *
- * Templates are fetched on demand rather than bundled: 25 of them are ~9-40 KB
- * of HTML each, and there is no reason to ship them in the JS graph.
+ * Các mẫu được nạp theo yêu cầu thay vì đóng gói kèm: 25 mẫu, mỗi mẫu khoảng
+ * 9-40 KB HTML, và không có lý do gì để mang chúng vào đồ thị JS.
  */
 import type { Artifact, ArtifactAnalysis } from './types';
 
 /**
- * Root of the copied asset tree. Override for a sub-path deployment.
+ * Gốc của cây tài sản đã sao chép. Có thể ghi đè cho bản triển khai ở đường dẫn
+ * con.
  *
- * Read defensively: Vite substitutes the literal, but the property access has
- * to survive being imported outside a bundle (the script harnesses), where
- * `import.meta.env` does not exist.
+ * Đọc một cách phòng thủ: Vite thay thế giá trị literal, nhưng phép truy cập
+ * thuộc tính phải tồn tại được khi được import ngoài một gói (các bộ kiểm tra
+ * bằng script), nơi `import.meta.env` không tồn tại.
  */
 function envAssetBase(): string | undefined {
   const env = (import.meta as { env?: Record<string, unknown> }).env;
@@ -31,7 +32,8 @@ const ASSET_BASE = envAssetBase() ?? '/mb-assets';
 export interface ScenarioMeta {
   id: string;
   match?: string;
-  /** Human-readable param spec (only used by the model prompt in ai4edu). */
+  /** Đặc tả params dạng người đọc được (chỉ được prompt của mô hình dùng trong
+   *  ai4edu). */
   params?: string;
   required_params?: string[];
   param_defaults?: Record<string, unknown>;
@@ -51,25 +53,28 @@ export interface InstantiatedScenario {
   html: string;
   title: string;
   analysis: ArtifactAnalysis | null;
-  /** False when a `require_resolved` lookup found nothing for the key param. */
+  /** False khi một phép tra `require_resolved` không tìm thấy gì cho param khóa. */
   resolved: boolean;
 }
 
-// ------------------------------------------------------------------ loading
+// -------------------------------------------------------------- nạp dữ liệu
 
 const metaCache = new Map<string, ScenarioMeta | null>();
-const templateCache = new Map<string, string>();/** The scenario ids exported into `public/mb-assets/scenarios/`. Kept explicit
- *  so the catalog can be typed and a missing file is a clear error rather than
- *  a silent 404 at spawn time. `book` is excluded: its reader needs PDFs that
- *  are not in the repository. */
+const templateCache = new Map<string, string>();/** Các id kịch bản được xuất vào `public/mb-assets/scenarios/`. Được liệt kê
+ *  tường minh để danh mục có thể được định kiểu và một tệp thiếu sẽ là lỗi rõ
+ *  ràng thay vì 404 âm thầm lúc tái tạo. */
 export const SCENARIO_IDS = [
   'anatomy_3d',
   'backprop',
+  'book',
   'bubble_sort',
   'cone',
   'conv_pipeline',
   'cylinder',
   'function_plot',
+  'faraday_vi',
+  'faraday_en',
+  'ph_scale_en',
   'gaussian',
   'helix',
   'hyperboloid',
@@ -114,14 +119,14 @@ async function loadTemplate(id: string): Promise<string> {
   const cached = templateCache.get(id);
   if (cached) return cached;
   const res = await fetch(asset(`scenarios/${id}.html`));
-  if (!res.ok) throw new Error(`Scenario template "${id}" is missing (${res.status}).`);
+  if (!res.ok) throw new Error(`Mẫu kịch bản "${id}" bị thiếu (${res.status}).`);
   const html = await res.text();
   templateCache.set(id, html);
   return html;
 }
 
-/** Re-render a template with new params (used by the scenario refine path,
- *  which merges a params patch and needs the fresh document). */
+/** Kết xuất lại một mẫu với params mới (dùng bởi đường tinh chỉnh kịch bản, vốn
+ *  trộn một bản vá params và cần tài liệu mới). */
 export async function rerender(
   id: string,
   params: Record<string, unknown>,
@@ -129,12 +134,12 @@ export async function rerender(
   return renderTemplate(await loadTemplate(id), params);
 }
 
-// ------------------------------------------------------------------- render
+// ----------------------------------------------------------------- kết xuất
 
 /**
- * Merge spawn-time params over the scenario's defaults and check that every
- * required param is present. Returns null when the scenario is unknown or a
- * required param has no value (the caller falls back to full generation).
+ * Trộn params lúc tái tạo lên các giá trị mặc định của kịch bản và kiểm tra rằng
+ * mọi param bắt buộc đều có mặt. Trả về null khi kịch bản không xác định hoặc
+ * một param bắt buộc không có giá trị (bên gọi quay về sinh đầy đủ).
  */
 export function normalizeParams(
   meta: ScenarioMeta | null,
@@ -149,13 +154,13 @@ export function normalizeParams(
   return merged;
 }
 
-/** Inject params into the template. `JSON.stringify` keeps the substituted
- *  value safe inside the template's `const PARAMS = __PARAMS__;` literal. */
+/** Chèn params vào mẫu. `JSON.stringify` giữ giá trị được thay thế an toàn bên
+ *  trong literal `const PARAMS = __PARAMS__;` của mẫu. */
 export function renderTemplate(html: string, params: Record<string, unknown>): string {
   return html.replace('__PARAMS__', JSON.stringify(params));
 }
 
-// ------------------------------------------------------- analysis / titles
+// ----------------------------------------------------- phân tích / tiêu đề
 
 interface StructureEntry {
   meshId?: string;
@@ -199,8 +204,8 @@ function asList(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [v];
 }
 
-/** Port of ai4edu's `_resolve_term`: free text -> matching entry keys, plus a
- *  flag for whether the term means anything at all in this data set. */
+/** Bản chuyển từ `_resolve_term` của ai4edu: văn bản tự do -> các khóa mục khớp,
+ *  kèm cờ cho biết thuật ngữ có mang ý nghĩa gì trong tập dữ liệu này không. */
 export function resolveTerm(
   data: DetailsData,
   term: string,
@@ -259,8 +264,9 @@ export function resolveTerm(
   return { keys: hits, recognized: hits.length > 0 };
 }
 
-/** Naive `{key}` substitution — `String.format`-style templates with stray
- *  braces would explode a real formatter, and params are model-shaped. */
+/** Phép thay thế `{key}` giản dị — các mẫu kiểu `String.format` với dấu ngoặc
+ *  thừa sẽ làm nổ một bộ định dạng thật, và params thì có hình dạng do mô hình
+ *  tạo ra. */
 function fill(template: string, values: Record<string, unknown>): string {
   let out = template;
   for (const [k, v] of Object.entries(values)) {
@@ -270,9 +276,10 @@ function fill(template: string, values: Record<string, unknown>): string {
 }
 
 /**
- * Params -> (analysis, title, resolved) for a scenario's `analysis` /
- * `title_template` blocks. The details-file lookup maps a free-text param to
- * named entries so the title can read "Anatomy: Heart" without the model.
+ * Params -> (phân tích, tiêu đề, resolved) cho các khối `analysis` /
+ * `title_template` của một kịch bản. Phép tra trong tệp chi tiết ánh xạ một
+ * param văn bản tự do sang các mục có tên để tiêu đề có thể đọc là
+ * "Anatomy: Heart" mà không cần mô hình.
  */
 export async function buildAnalysis(
   id: string,
@@ -302,7 +309,7 @@ export async function buildAnalysis(
   if (matched.length) {
     const names = [...new Set(matched.map((m) => m.name).filter(Boolean))];
     values.matched_names = names.join(', ');
-    let clause = `Matched: ${names.join(', ')}`;
+    let clause = `Khớp: ${names.join(', ')}`;
     if (matched[0]!.region) clause += ` (${String(matched[0]!.region).replace(/_/g, ' ')})`;
     observation.push(clause + '.');
     const summary = matched[0]!.summary ?? matched[0]!.description;
@@ -311,7 +318,7 @@ export async function buildAnalysis(
 
   const notes: string[] = [];
   if (details && keyParam && values.label && !matched.length && !resolved) {
-    notes.push(`"${String(values.label)}" is not in the bundled model set.`);
+    notes.push(`"${String(values.label)}" không có trong bộ mô hình đi kèm.`);
   }
   for (const field of spec.notes_fields ?? []) {
     const vals = matched
@@ -334,7 +341,7 @@ export async function buildAnalysis(
     : id.replace(/_/g, ' ');
   title = title.trim().replace(/:$/, '') || id.replace(/_/g, ' ');
 
-  // A missing/empty key param means "whole model", which always resolves.
+  // Param khóa thiếu/rỗng nghĩa là "toàn bộ mô hình", vốn luôn phân giải được.
   if (spec.require_resolved) {
     const label = keyParam ? String(params[keyParam] ?? '').trim() : '';
     resolved = resolved || !label;
@@ -343,7 +350,7 @@ export async function buildAnalysis(
   return { analysis, title, resolved };
 }
 
-// -------------------------------------------------------------- entry point
+// ----------------------------------------------------------------- điểm vào
 
 export class ScenarioError extends Error {
   constructor(message: string) {
@@ -353,19 +360,19 @@ export class ScenarioError extends Error {
 }
 
 /**
- * One call for the picker path: normalize params, render the template, derive
- * title + analysis. Throws ScenarioError with a user-facing message.
+ * Một lời gọi cho đường chọn từ danh mục: chuẩn hóa params, kết xuất mẫu, suy ra
+ * tiêu đề + phân tích. Ném ScenarioError kèm thông báo dành cho người dùng.
  */
 export async function instantiate(
   id: string,
   params: Record<string, unknown> = {},
 ): Promise<InstantiatedScenario> {
   const meta = await getMeta(id);
-  if (!meta) throw new ScenarioError(`Unknown item "${id}".`);
+  if (!meta) throw new ScenarioError(`Không rõ mục "${id}".`);
   const merged = normalizeParams(meta, params);
   if (!merged) {
     throw new ScenarioError(
-      `"${id}" needs ${(meta.required_params ?? []).join(', ')} — which the picker did not supply.`,
+      `"${id}" cần ${(meta.required_params ?? []).join(', ')} — thứ mà trình chọn không cung cấp.`,
     );
   }
   const html = renderTemplate(await loadTemplate(id), merged);
@@ -373,7 +380,7 @@ export async function instantiate(
   return { scenario: id, params: merged, html, title, analysis, resolved };
 }
 
-/** Turn an instantiated scenario into a board artifact ready to place. */
+/** Biến một kịch bản đã khởi tạo thành một kết quả sẵn sàng để đặt lên bảng. */
 export function scenarioArtifact(inst: InstantiatedScenario): Artifact {
   return {
     id: crypto.randomUUID().replace(/-/g, '').slice(0, 20),
@@ -390,11 +397,12 @@ export function scenarioArtifact(inst: InstantiatedScenario): Artifact {
   };
 }
 
-// ------------------------------------------------------------ classification
+// ----------------------------------------------------------------- phân loại
 
 /**
- * The scenario catalog as the classifier prompt sees it — the same bullet block
- * ai4edu's `catalog_text()` built (`**id** — match` + its params spec).
+ * Danh mục kịch bản đúng như prompt của bộ phân loại nhìn thấy — cùng khối gạch
+ * đầu dòng mà `catalog_text()` của ai4edu dựng nên (`**id** — match` + đặc tả
+ * params của nó).
  */
 export function buildCatalogText(metas: Record<string, ScenarioMeta>): string {
   const lines = Object.values(metas)
@@ -405,7 +413,7 @@ export function buildCatalogText(metas: Record<string, ScenarioMeta>): string {
 
 const metaCacheAll = new Map<string, ScenarioMeta | null>();
 
-/** Load the metadata for every catalogued scenario (cached per id). */
+/** Nạp metadata cho mọi kịch bản trong danh mục (được lưu tạm theo id). */
 export async function loadAllMetas(): Promise<Record<string, ScenarioMeta>> {
   const out: Record<string, ScenarioMeta> = {};
   await Promise.all(

@@ -15,20 +15,21 @@ import type { BoardSummary } from '../lib/types';
 function fmtRelative(iso: string): string {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
   if (!Number.isFinite(s)) return '';
-  if (s < 60) return 'just now';
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, {
+  if (s < 60) return 'vừa xong';
+  if (s < 3600) return `${Math.floor(s / 60)} phút trước`;
+  if (s < 86400) return `${Math.floor(s / 3600)} giờ trước`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)} ngày trước`;
+  return new Date(iso).toLocaleDateString('vi-VN', {
     month: 'short',
     day: 'numeric',
   });
 }
 
 /**
- * Board switcher: every board lives in localStorage, so this is a plain
- * dropdown over the saved index. Rename/duplicate/delete are inline — no
- * dialogs, since there is nothing to confirm against a server.
+ * Bộ chuyển bảng: mọi bảng đều nằm trong localStorage, nên đây chỉ là một
+ * menu thả xuống đơn giản trên danh sách đã lưu. Đổi tên/nhân bản/xóa đều
+ * thực hiện ngay tại chỗ — không có hộp thoại, vì không có máy chủ nào để
+ * xác nhận.
  */
 export default function BoardSwitcher({
   boards,
@@ -55,7 +56,7 @@ export default function BoardSwitcher({
 
   const active = boards.find((b) => b.id === activeId);
 
-  // Click-away / Escape closes the menu.
+  // Bấm ra ngoài / nhấn Escape để đóng menu.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -91,9 +92,9 @@ export default function BoardSwitcher({
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex h-7 max-w-56 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        title="Switch board"
+        title="Chuyển bảng"
       >
-        <span className="truncate">{active?.name ?? 'Board'}</span>
+        <span className="truncate">{active?.name ?? 'Bảng'}</span>
         <ChevronDown
           size={13}
           className={cn('shrink-0 transition-transform', open && 'rotate-180')}
@@ -129,14 +130,14 @@ export default function BoardSwitcher({
                     <button
                       onClick={() => commitRename(b.id)}
                       className="flex h-6 w-6 items-center justify-center rounded text-emerald-600 hover:bg-emerald-500/10"
-                      title="Save name"
+                      title="Lưu tên"
                     >
                       <Check size={12} />
                     </button>
                     <button
                       onClick={() => setRenamingId(null)}
                       className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-                      title="Cancel"
+                      title="Hủy"
                     >
                       <X size={12} />
                     </button>
@@ -149,7 +150,7 @@ export default function BoardSwitcher({
                         setOpen(false);
                       }}
                       className="min-w-0 flex-1 text-left"
-                      title={`Open "${b.name}"`}
+                      title={`Mở "${b.name}"`}
                     >
                       <span
                         className={cn(
@@ -171,14 +172,14 @@ export default function BoardSwitcher({
                           setDraft(b.name);
                         }}
                         className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                        title="Rename"
+                        title="Đổi tên"
                       >
                         <Pencil size={11} />
                       </button>
                       <button
                         onClick={() => onDuplicate(b.id)}
                         className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                        title="Duplicate"
+                        title="Nhân bản"
                       >
                         <Copy size={11} />
                       </button>
@@ -189,9 +190,9 @@ export default function BoardSwitcher({
                             setConfirmDeleteId(null);
                           }}
                           className="flex h-6 items-center justify-center rounded bg-destructive px-1.5 text-[10px] font-semibold text-white"
-                          title="Click again to confirm delete"
+                          title="Bấm lần nữa để xác nhận xóa"
                         >
-                          sure?
+                          chắc chắn?
                         </button>
                       ) : (
                         <button
@@ -200,8 +201,8 @@ export default function BoardSwitcher({
                           className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30 disabled:hover:bg-transparent"
                           title={
                             boards.length <= 1
-                              ? 'The last board cannot be deleted'
-                              : 'Delete board'
+                              ? 'Không thể xóa bảng cuối cùng'
+                              : 'Xóa bảng'
                           }
                         >
                           <Trash2 size={11} />
@@ -222,7 +223,7 @@ export default function BoardSwitcher({
             className="flex w-full items-center gap-1.5 border-t border-border px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/5"
           >
             <Plus size={13} />
-            New board
+            Bảng mới
           </button>
         </div>
       )}

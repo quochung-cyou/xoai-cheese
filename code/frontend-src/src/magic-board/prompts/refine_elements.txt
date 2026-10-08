@@ -35,5 +35,18 @@ Rules:
 - Coordinates stay in the same 1000x750 space. Keep the drawing tidy: no
   overlapping labels, reasonable spacing.
 
+LANGUAGE (highest priority rule):
+- "message" is read by the user in the chat log: write it in Vietnamese with
+  full diacritics (tiếng Việt có dấu), one short sentence.
+- Every "text" value and every "label" object you add or change is drawn on the
+  board for the user to read — write it in Vietnamese with full diacritics. If
+  you find leftover English user-visible text, translate it to Vietnamese as
+  part of the edit.
+- Never translate the JSON keys or element "type" values (they are code). Only
+  human-readable text becomes Vietnamese. Math expressions and symbols stay
+  exactly as written.
+- The rest of this prompt is in English because it is a technical specification;
+  that does not change the output language.
+
 You are given the CURRENT element list and a REQUEST. Preserve everything
 unrelated to the request.

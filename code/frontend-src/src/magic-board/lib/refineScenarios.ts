@@ -1,13 +1,13 @@
 /**
- * Refining a scenario artifact.
+ * Tinh chỉnh một kết quả kịch bản.
  *
- * Port of ai4edu's `_stream_scenario_refinement`: a scenario is a template plus
- * named params, so the model does not edit code — it emits a params patch, the
- * patch is merged over the current params, the template is re-rendered, and the
- * new html/params/title/analysis become the artifact payload.
+ * Bản chuyển từ `_stream_scenario_refinement` của ai4edu: một kịch bản là một
+ * mẫu cộng với các params có tên, nên mô hình không sửa mã — nó phát ra một bản
+ * vá params, bản vá được trộn lên params hiện tại, mẫu được kết xuất lại, và
+ * html/params/tiêu đề/phân tích mới trở thành payload của kết quả.
  *
- * Nothing here knows what any individual scenario is about, so new catalog
- * entries get this path for free.
+ * Ở đây không có gì biết từng kịch bản nói về điều gì, nên các mục mới trong
+ * danh mục tự động có được đường xử lý này.
  */
 import { LlmError, parseLlmJson, completeChatEvents } from './llm';
 import { PROMPT_REFINE_SCENARIO } from './prompts';
@@ -16,13 +16,14 @@ import type { ScenarioMeta } from './scenarios';
 import type { LLMConfig } from './settings';
 import type { Artifact, RefineEvent } from './types';
 
-/** How many known-good values to show the model for a free-text key param. */
+/** Số lượng giá trị đã biết là đúng để hiển thị cho mô hình với một param khóa
+ *  dạng văn bản tự do. */
 const SAMPLE_VALUES = 60;
 
 /**
- * The declared spec for a scenario, plus a sample of valid values for its
- * key param. Without the sample a model asked to "show the skull" has no way
- * to know whether the atlas spells it "skull", "cranium" or "FMA46565".
+ * Đặc tả đã khai báo cho một kịch bản, kèm một mẫu các giá trị hợp lệ cho param
+ * khóa của nó. Nếu không có mẫu, một mô hình được yêu cầu "hiện hộp sọ" sẽ không
+ * có cách nào biết tập bản đồ viết nó là "skull", "cranium" hay "FMA46565".
  */
 async function buildContext(
   meta: ScenarioMeta,
@@ -38,8 +39,8 @@ async function buildContext(
       const names = Object.values(concepts)
         .map((c) => c.name)
         .filter((n): n is string => !!n);
-      // Prefer the keys the alias table actually resolves — those are the
-      // strings a user would type and the resolver accepts.
+      // Ưu tiên những khóa mà bảng bí danh thực sự phân giải được — đó là những
+      // chuỗi người dùng sẽ gõ và bộ phân giải chấp nhận.
       const aliasKeys = Object.keys(details.aliases ?? {});
       const recognizable = aliasKeys.filter((k) => {
         const { keys } = resolveTerm(details, k);
@@ -74,9 +75,9 @@ export interface ScenarioRefineResult {
 }
 
 /**
- * Run one scenario refinement turn. Returns the new payload (absent when the
- * request could not be expressed through the template's params) and a
- * user-facing message.
+ * Chạy một lượt tinh chỉnh kịch bản. Trả về payload mới (vắng mặt khi yêu cầu
+ * không thể diễn đạt được qua params của mẫu) và một thông báo dành cho người
+ * dùng.
  */
 export async function refineScenarioArtifact(
   cfg: LLMConfig,
@@ -87,11 +88,11 @@ export async function refineScenarioArtifact(
 ): Promise<ScenarioRefineResult> {
   const scenarioId = artifact.payload.scenario;
   if (!scenarioId) {
-    throw new LlmError('This artifact has no template to refine.');
+    throw new LlmError('Kết quả này không có mẫu nào để tinh chỉnh.');
   }
   const meta = await getMeta(scenarioId);
   if (!meta) {
-    throw new LlmError(`Unknown template "${scenarioId}".`);
+    throw new LlmError(`Mẫu không xác định "${scenarioId}".`);
   }
 
   const currentParams = (artifact.payload.params ?? {}) as Record<string, unknown>;
@@ -115,8 +116,8 @@ export async function refineScenarioArtifact(
       onEvent({ type: 'thinking', delta: ev.delta });
       continue;
     }
-    // The output is raw JSON — never narrate it into the chat. The clean
-    // summary arrives in the result's `message`.
+    // Kết quả là JSON thô — không bao giờ kể nó vào chat. Bản tóm tắt sạch sẽ
+    // đến trong `message` của kết quả.
     rawParts.push(ev.delta);
   }
 
@@ -127,22 +128,25 @@ export async function refineScenarioArtifact(
   const message = String(parsed?.message ?? '').trim();
 
   if (parsed?.params === null || parsed?.params === undefined) {
-    // The model says this isn't expressible through the template's params —
-    // report it and change nothing.
+    // Mô hình nói điều này không diễn đạt được qua params của mẫu — hãy báo lại
+    // và không thay đổi gì.
     return {
       message:
         message ||
-        "That isn't expressible through this document's options — nothing changed.",
+        'Điều đó không thể diễn đạt được qua các tùy chọn của tài liệu này — ' +
+        'không có gì thay đổi.',
     };
   }
   if (typeof parsed.params !== 'object' || Array.isArray(parsed.params)) {
-    throw new LlmError('The model returned malformed options. Try rephrasing.');
+    throw new LlmError(
+      'Mô hình trả về các tùy chọn sai định dạng. Hãy thử diễn đạt lại.',
+    );
   }
 
   const merged = { ...currentParams, ...(parsed.params as Record<string, unknown>) };
 
-  // Re-instantiate: normalize against the meta, re-render, and re-derive
-  // title + analysis so a focus change retitles "Anatomy: heart" -> "Anatomy: brain".
+  // Khởi tạo lại: chuẩn hóa theo meta, kết xuất lại, và suy ra lại tiêu đề +
+  // phân tích để việc đổi tiêu điểm đổi tên "Anatomy: heart" -> "Anatomy: brain".
   let inst;
   try {
     inst = await instantiate(scenarioId, merged);
@@ -150,19 +154,22 @@ export async function refineScenarioArtifact(
     return {
       message:
         message ||
-        `Those options don't fit this document (${
+        `Các tùy chọn đó không hợp với tài liệu này (${
           e instanceof Error ? e.message : String(e)
-        }) — nothing changed.`,
+        }) — không có gì thay đổi.`,
     };
   }
   if (!inst.resolved) {
     return {
-      message: message || "That isn't in this document's data — kept the current view.",
+      message:
+        message ||
+        'Điều đó không có trong dữ liệu của tài liệu này — vẫn giữ khung nhìn ' +
+          'hiện tại.',
     };
   }
 
   return {
-    message: message || `Updated ${inst.title}.`,
+    message: message || `Đã cập nhật ${inst.title}.`,
     payload: {
       scenario: scenarioId,
       params: inst.params,

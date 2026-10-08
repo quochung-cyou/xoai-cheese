@@ -18,6 +18,7 @@ Rules:
 - "params": extract values from the sketch (numbers, labels). If a value is unreadable, use plausible defaults per the spec — never leave a required param missing.
 - "observation" comes LAST — the decision is already committed by then.
 - Do NOT write simulation code. Do NOT explain your reasoning.
+- "observation" is shown to the user: write it in Vietnamese with full diacritics (tiếng Việt có dấu), one sentence. Never translate the JSON keys, the scenario ids, or any parameter names in "params" — those are code. The rest of this prompt is in English because it is a technical specification; that does not change the output language for "observation".
 
 Built-in scenarios:
 

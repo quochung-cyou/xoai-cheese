@@ -9,13 +9,14 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "scenarios:export": "node --experimental-strip-types scripts/export-scenarios.mts",
-    "check": "npm run check:edits && npm run check:scanner && npm run check:storage && npm run check:cache && npm run check:llm && npm run check:wire && npm run check:scenarios",
+    "check": "npm run check:edits && npm run check:scanner && npm run check:storage && npm run check:cache && npm run check:llm && npm run check:wire && npm run check:book && npm run check:scenarios",
     "check:edits": "node --experimental-strip-types scripts/check-edits.mts",
     "check:scanner": "node --experimental-strip-types scripts/check-scanner.mts",
     "check:storage": "node --experimental-strip-types scripts/check-storage.mts",
     "check:cache": "node --experimental-strip-types scripts/check-cache.mts",
     "check:llm": "node --import ./scripts/register-hooks.mjs --experimental-strip-types scripts/check-llm.mts",
     "check:wire": "node --import ./scripts/register-hooks.mjs --experimental-strip-types scripts/check-wire.mts",
+    "check:book": "node --experimental-strip-types scripts/check-book.mts",
     "check:scenarios": "node --experimental-strip-types scripts/check-scenarios.mts"
   },
   "dependencies": {

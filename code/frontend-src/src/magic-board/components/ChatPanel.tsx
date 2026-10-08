@@ -9,30 +9,31 @@ import { EmptyState, MessageRow } from './chat/messages';
 import { applyEvent, newRun } from './chat/reducer';
 import { AgentRun } from './chat/trace';
 
-const FLUSH_MS = 50; // throttle: don't re-render per token
+const FLUSH_MS = 50; // giới hạn tần suất: không render lại theo từng token
 
 interface ChatPanelProps {
   getConfig: () => LLMConfig;
   modelLabel: string;
-  /** Opens the model settings dialog. */
+  /** Mở hộp thoại cài đặt mô hình. */
   onOpenSettings: () => void;
   artifacts: Artifact[];
   activeArtifactId: string | null;
-  /** Only used by the fallback picker for detached artifacts — normal
-   *  targeting comes from canvas selection. */
+  /** Chỉ được bộ chọn dự phòng dùng cho các artifact đã tách rời — việc chọn
+   *  mục tiêu thông thường do vùng chọn trên bảng vẽ quyết định. */
   onSelectArtifact: (id: string) => void;
   messages: ChatMessage[];
   onMessagesChange: (messages: ChatMessage[]) => void;
-  /** done payload for the artifact — App updates state + canvas. */
+  /** payload done cho artifact — App cập nhật state + bảng vẽ. */
   onArtifactPayload: (artifactId: string, payload: Artifact['payload']) => void;
-  /** artifact ids whose canvas elements were manually deleted. */
+  /** id các artifact mà phần tử trên bảng vẽ đã bị xóa thủ công. */
   detachedIds: ReadonlySet<string>;
   activeArtifact: Artifact | null;
 }
 
 /**
- * Refine chat. Select a generated sim/diagram on the canvas, describe the
- * change, and watch the edit land live (thinking, narration, per-edit diffs).
+ * Trò chuyện Tinh chỉnh. Chọn một mô phỏng/sơ đồ đã tạo trên bảng vẽ, mô tả
+ * thay đổi mong muốn, rồi xem chỉnh sửa hiện ra trực tiếp (suy luận, tường
+ * thuật, khác biệt theo từng chỉnh sửa).
  */
 export default function ChatPanel({
   getConfig,
@@ -49,15 +50,15 @@ export default function ChatPanel({
 }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  // Live run state in a ref — token deltas flush to React every FLUSH_MS
-  // instead of once per token.
+  // Trạng thái lượt chạy trực tiếp trong một ref — các delta token được đẩy
+  // sang React mỗi FLUSH_MS thay vì mỗi token một lần.
   const runRef = useRef<RefineRun | null>(null);
   const [, setTick] = useState(0);
   const flushTimer = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  /** Follow new content only while the user is pinned to the bottom. */
+  /** Chỉ bám theo nội dung mới khi người dùng còn neo ở cuối. */
   const stickRef = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
 
@@ -69,7 +70,7 @@ export default function ChatPanel({
     }, FLUSH_MS);
   };
 
-  // Auto-scroll on every flush — but only while pinned to the bottom.
+  // Tự động cuộn sau mỗi lần đẩy — nhưng chỉ khi còn neo ở cuối.
   useEffect(() => {
     const el = scrollRef.current;
     if (el && stickRef.current) el.scrollTo({ top: el.scrollHeight });
@@ -91,7 +92,7 @@ export default function ChatPanel({
     });
   }, []);
 
-  // Abort an in-flight run if the panel unmounts.
+  // Hủy một lượt chạy đang xử lý nếu bảng điều khiển bị gỡ khỏi giao diện.
   useEffect(
     () => () => {
       abortRef.current?.abort();
@@ -108,11 +109,11 @@ export default function ChatPanel({
 
     if (!artifact) {
       const why = activeArtifactId
-        ? `The selected element references artifact #${activeArtifactId.slice(
+        ? `Phần tử đang chọn trỏ tới artifact #${activeArtifactId.slice(
             0,
             6,
-          )}, but it isn't in this board's artifacts — it was probably deleted or copied. Analyze the sketch again.`
-        : 'No artifact selected — click a generated sim or diagram on the canvas, or analyze your sketch first.';
+          )}, nhưng artifact này không có trong bảng hiện tại — có thể nó đã bị xóa hoặc bị sao chép. Hãy Phân tích lại bản phác thảo.`
+        : 'Chưa chọn artifact nào — hãy bấm vào một mô phỏng hoặc sơ đồ đã tạo trên bảng vẽ, hoặc Phân tích bản phác thảo của bạn trước.';
       onMessagesChange([
         ...messages,
         { role: 'user', content: text, at: now, artifact_id: activeArtifactId },
@@ -130,7 +131,7 @@ export default function ChatPanel({
         {
           role: 'assistant',
           content:
-            'No model configured yet. Open Settings (the chip below) and fill in the endpoint, model and API key.',
+            'Chưa cấu hình mô hình (model). Hãy mở Cài đặt (nút bên dưới) và điền điểm cuối (endpoint), mô hình (model) cùng khóa API (API key).',
           at: now,
         },
       ]);
@@ -168,8 +169,8 @@ export default function ChatPanel({
     );
     abortRef.current = null;
 
-    // Persist the run's reasoning so completed messages keep the
-    // 'Thought for Ns' block after the live trace disappears.
+    // Lưu lại phần suy luận của lượt chạy để các tin nhắn đã hoàn tất vẫn giữ
+    // khối 'Đã suy luận trong Ns' sau khi dấu vết trực tiếp biến mất.
     const runMeta = runRef.current;
     const traceMeta =
       runMeta && runMeta.thinking
@@ -189,8 +190,9 @@ export default function ChatPanel({
         },
       ]);
     } else if (outcome.message !== undefined) {
-      // Done with no payload — the request isn't expressible on this
-      // artifact; the reply lands in chat and the canvas stays untouched.
+      // Xong nhưng không có payload — yêu cầu không thể diễn đạt trên
+      // artifact này; câu trả lời nằm lại trong khung trò chuyện và bảng vẽ
+      // giữ nguyên.
       onMessagesChange([
         ...withUser,
         {
@@ -203,8 +205,8 @@ export default function ChatPanel({
       ]);
     } else {
       const detail = outcome.aborted
-        ? 'Refinement stopped.'
-        : `Refinement failed: ${outcome.error ?? 'the stream ended without a result'}`;
+        ? 'Đã dừng tinh chỉnh.'
+        : `Tinh chỉnh thất bại: ${outcome.error ?? 'luồng kết thúc mà không có kết quả'}`;
       onMessagesChange([
         ...withUser,
         {
@@ -261,7 +263,7 @@ export default function ChatPanel({
           <button
             onClick={handleJump}
             className="absolute bottom-3 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md transition-colors hover:text-foreground"
-            title="Jump to latest"
+            title="Tới tin nhắn mới nhất"
           >
             <ArrowDown size={14} />
           </button>

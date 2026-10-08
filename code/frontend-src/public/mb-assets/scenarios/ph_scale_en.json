@@ -1,0 +1,6 @@
+{
+  "match": "pH scale basics, acids, bases, pH of liquids; original English simulation",
+  "params": "{} — standalone PhET simulation with its own controls",
+  "param_defaults": {},
+  "title_template": "Thang pH cơ bản (EN)"
+}

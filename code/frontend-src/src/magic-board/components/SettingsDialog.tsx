@@ -92,7 +92,10 @@ export default function SettingsDialog({
       const reply = await completeChat(cfg, 'Reply with the single word: pong', [
         { type: 'text', text: 'ping' },
       ]);
-      setTestResult({ ok: true, text: `Đã kết nối — mô hình (model) trả lời "${reply.trim().slice(0, 40)}"` });
+      setTestResult({
+        ok: true,
+        text: `Đã kết nối — mô hình (model) trả lời "${reply.trim().slice(0, 40)}"`,
+      });
     } catch (e) {
       setTestResult({ ok: false, text: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -125,8 +128,8 @@ export default function SettingsDialog({
 
         <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 py-4">
           <Field
-            label="Endpoint (base URL)"
-            hint={`Chat completions URL: ${endpointUrl(cfg.base_url || '<url>')}`}
+            label="Điểm cuối (endpoint, base URL)"
+            hint={`URL chat completions: ${endpointUrl(cfg.base_url || '<url>')}`}
           >
             <input
               className={inputCls}
@@ -137,7 +140,7 @@ export default function SettingsDialog({
             />
           </Field>
 
-          <Field label="API key" hint="Stored in this browser only, and sent straight to the endpoint above.">
+          <Field label="Khóa API (API key)" hint="Chỉ được lưu trong trình duyệt này và gửi thẳng tới điểm cuối (endpoint) ở trên.">
             <div className="relative">
               <input
                 className={cn(inputCls, 'pr-9')}
@@ -152,7 +155,7 @@ export default function SettingsDialog({
                 type="button"
                 onClick={() => setShowKey((s) => !s)}
                 className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-                title={showKey ? 'Hide key' : 'Show key'}
+                title={showKey ? 'Ẩn khóa' : 'Hiện khóa'}
               >
                 {showKey ? <EyeOff size={13} /> : <Eye size={13} />}
               </button>
@@ -160,8 +163,8 @@ export default function SettingsDialog({
           </Field>
 
           <Field
-            label="Model"
-            hint="Needs vision for the sketch analysis step (e.g. gpt-4o, claude-sonnet-4, gemini-2.5-flash, qwen2.5-vl)."
+            label="Mô hình (model)"
+            hint="Cần khả năng thị giác (vision) cho bước phân tích bản phác thảo (ví dụ: gpt-4o, claude-sonnet-4, gemini-2.5-flash, qwen2.5-vl)."
           >
             <input
               className={inputCls}
@@ -173,8 +176,8 @@ export default function SettingsDialog({
           </Field>
 
           <Field
-            label="Sketch matching"
-            hint="How Analyze decides between a built-in template and generating a one-off simulation."
+            label="Khớp bản phác thảo"
+            hint="Cách Phân tích quyết định giữa một mẫu có sẵn và việc tạo một mô phỏng dùng một lần."
           >
             <select
               className={cn(inputCls, 'cursor-pointer')}
@@ -197,17 +200,17 @@ export default function SettingsDialog({
               }
             >
               <option value="auto">
-                Match a built-in item first, then generate (recommended)
+                Khớp một mục có sẵn trước, sau đó mới tạo (khuyến nghị)
               </option>
-              <option value="only">Only match built-in items (no generation)</option>
-              <option value="never">Always generate, never match</option>
+              <option value="only">Chỉ khớp các mục có sẵn (không tạo mới)</option>
+              <option value="never">Luôn tạo mới, không bao giờ khớp</option>
             </select>
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
             <Field
-              label="Analyze max tokens"
-              hint="Cap for the analyze call only. Small = fast."
+              label="Token tối đa cho Phân tích"
+              hint="Giới hạn chỉ cho lệnh gọi phân tích. Nhỏ = nhanh."
             >
               <input
                 className={inputCls}
@@ -224,7 +227,7 @@ export default function SettingsDialog({
                 placeholder="4096"
               />
             </Field>
-            <Field label="Refine max tokens" hint="Raise it if sims come back cut off.">
+            <Field label="Token tối đa cho Tinh chỉnh" hint="Tăng lên nếu mô phỏng trả về bị cắt cụt.">
               <input
                 className={inputCls}
                 type="number"
@@ -241,8 +244,8 @@ export default function SettingsDialog({
           </div>
 
           <Field
-            label="Match max tokens"
-            hint="Cap for the classify call. A reasoning model can spend this thinking, so raise it if matching returns nothing."
+            label="Token tối đa cho Khớp"
+            hint="Giới hạn cho lệnh gọi phân loại (classify). Mô hình suy luận có thể dùng phần này để suy nghĩ, nên hãy tăng lên nếu việc khớp không trả về gì."
           >
             <input
               className={inputCls}
@@ -260,7 +263,7 @@ export default function SettingsDialog({
             />
           </Field>
 
-          <Field label="Temperature" hint="Unset = endpoint default.">
+          <Field label="Nhiệt độ (temperature)" hint="Không đặt = mặc định của điểm cuối (endpoint).">
             <input
               className={inputCls}
               type="number"
@@ -278,7 +281,7 @@ export default function SettingsDialog({
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Reasoning effort" hint="For thinking models; off = fastest.">
+            <Field label="Mức suy luận (reasoning effort)" hint="Dành cho mô hình có suy luận; tắt = nhanh nhất.">
               <select
                 className={cn(inputCls, 'cursor-pointer')}
                 value={cfg.reasoning_effort ?? ''}
@@ -290,14 +293,14 @@ export default function SettingsDialog({
                   })
                 }
               >
-                <option value="">endpoint default</option>
-                <option value="off">off</option>
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
+                <option value="">mặc định của điểm cuối (endpoint)</option>
+                <option value="off">tắt</option>
+                <option value="low">thấp</option>
+                <option value="medium">trung bình</option>
+                <option value="high">cao</option>
               </select>
             </Field>
-            <Field label="Thinking token budget" hint="Beats effort when set.">
+            <Field label="Ngân sách token suy luận" hint="Được ưu tiên hơn mức suy luận khi đã đặt.">
               <input
                 className={inputCls}
                 type="number"
@@ -316,8 +319,8 @@ export default function SettingsDialog({
           </div>
 
           <Field
-            label="Analyze hotkey"
-            hint={`Press this key anywhere on the board to analyze. Single letters or keys like F2.`}
+            label="Phím tắt Phân tích"
+            hint={`Nhấn phím này ở bất kỳ đâu trên bảng để phân tích. Một chữ cái hoặc các phím như F2.`}
           >
             <input
               className={inputCls}
@@ -342,26 +345,29 @@ export default function SettingsDialog({
           )}
 
           <p className="text-[11px] leading-snug text-muted-foreground">
-            Everything runs in your browser. Settings are saved to this
-            browser's local storage and sent straight to your endpoint — there
-            is no server, and no key is ever built into the app.
+            Mọi thứ chạy trong trình duyệt của bạn. Cài đặt được lưu vào bộ nhớ
+            cục bộ (local storage) của trình duyệt này và gửi thẳng tới điểm
+            cuối (endpoint) của bạn — không có máy chủ nào, và không có khóa
+            nào được nhúng sẵn trong ứng dụng.
           </p>
         </div>
 
         <div className="flex items-center gap-2 border-t border-border px-4 py-3">
           <Button variant="outline" size="sm" onClick={() => void test()} disabled={testing}>
             {testing && <Loader2 size={13} className="mr-1.5 animate-spin" />}
-            Test connection
+            Kiểm tra kết nối
           </Button>
           <span className="text-[11px] text-muted-foreground">
-            {isConfigured(cfg) ? 'Ready' : 'Endpoint, model and key required'}
+            {isConfigured(cfg)
+              ? 'Sẵn sàng'
+              : 'Cần có điểm cuối (endpoint), mô hình (model) và khóa API (API key)'}
           </span>
           <div className="ml-auto flex gap-2">
             <Button variant="ghost" size="sm" onClick={onClose}>
-              Cancel
+              Hủy
             </Button>
             <Button size="sm" onClick={save}>
-              Save
+              Lưu
             </Button>
           </div>
         </div>

@@ -1,30 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head><script>
-addEventListener('error', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var t=(e&&e.message)||'Script failed to load';
-    var f=(e&&e.filename)||'';
-    if(m) m.textContent=f?t+' \u2014 '+f:t;
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-}, true);
-addEventListener('unhandledrejection', function(e){
-  try{
-    var ov=document.getElementById('overlay'); if(!ov) return;
-    ov.className='err';
-    var m=ov.querySelector('.msg');
-    var r=e&&e.reason;
-    var t=(r&&(r.message||r))||'Request failed';
-    if(m) m.textContent=String(t);
-    var s=ov.querySelector('.spin'); if(s) s.style.display='none';
-    ov.style.display='flex';
-  }catch(_){}
-});
+(function(){
+  var ov=function(){ return document.getElementById('overlay'); };
+  var show=function(text){
+    try{
+      var o=ov(); if(!o) return;
+      o.className='err';
+      var m=o.querySelector('.msg');
+      if(m) m.textContent=text;
+      var s=o.querySelector('.spin'); if(s) s.style.display='none';
+      o.style.display='flex';
+    }catch(_){}
+  };
+  // Name the URL that failed. "Failed to fetch" alone identifies nothing —
+  // the path is what points at the missing or mis-pathed asset.
+  var detail=function(e){
+    var r=e&&e.reason!==undefined?e.reason:(e||{});
+    var msg=(r&&(r.message||r))||'Yêu cầu thất bại';
+    msg=String(msg);
+    if(r&&r.url&&msg.indexOf(r.url)<0) return msg+' — '+r.url;
+    if(e&&e.filename) return msg+' — '+e.filename;
+    return msg;
+  };
+  addEventListener('error',function(e){ show(detail(e)); },true);
+  addEventListener('unhandledrejection',function(e){ show(detail(e)); });
+})()
 </script>
 <meta charset="utf-8">
 <style>
@@ -49,14 +50,14 @@ addEventListener('unhandledrejection', function(e){
 </style>
 </head>
 <body>
-<header>Bubble Sort<span id="status">ready</span></header>
+<header>Sắp xếp nổi bọt<span id="status">sẵn sàng</span></header>
 <div id="stage"><canvas id="cv"></canvas></div>
 <div id="controls">
-  <button id="play">Play</button>
-  <button id="reset" class="ghost">Reset</button>
-  <label>Speed <input id="speed" type="range" min="1" max="20" value="6"><span class="val" id="speedV">6</span></label>
-  <label>Array <input id="arr" type="text"></label>
-  <button id="apply" class="ghost">Apply</button>
+  <button id="play">Phát</button>
+  <button id="reset" class="ghost">Đặt lại</button>
+  <label>Tốc độ <input id="speed" type="range" min="1" max="20" value="6"><span class="val" id="speedV">6</span></label>
+  <label>Mảng <input id="arr" type="text"></label>
+  <button id="apply" class="ghost">Áp dụng</button>
 </div>
 <script>
 const PARAMS = __PARAMS__;
@@ -68,7 +69,7 @@ const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const status = document.getElementById('status');
 let arr, steps, stepIdx, playing = false, timer = null, delay = 160;
 
-// Precompute every swap step so playback is a simple cursor walk.
+// Tính trước mọi bước hoán đổi để khi phát chỉ cần chạy con trỏ.
 function computeSteps(a) {
   const s = [{ arr: a.slice(), i: -1, j: -1, swapped: false, sortedUpto: a.length }];
   const b = a.slice(); const n = b.length;
@@ -88,7 +89,7 @@ function reset() {
   steps = computeSteps(arr);
   stepIdx = 0;
   stop();
-  status.textContent = 'ready';
+  status.textContent = 'sẵn sàng';
   document.getElementById('arr').value = arr.join(', ');
   draw();
 }
@@ -104,7 +105,7 @@ function draw() {
     const bh = (a[k] / max) * (h - 70);
     const x = x0 + k * (bw + gap), y = h - 40 - bh;
     let fill = '#4f46e5';
-    if (k >= st.sortedUpto) fill = '#10b981';            // settled tail
+    if (k >= st.sortedUpto) fill = '#10b981';            // phần đuôi đã cố định
     else if (k === st.j || k === st.j + 1) fill = st.swapped ? '#ef4444' : '#f59e0b';
     ctx.fillStyle = fill;
     ctx.beginPath();
@@ -115,8 +116,8 @@ function draw() {
   }
   const pct = Math.round((stepIdx / (steps.length - 1)) * 100);
   status.textContent = stepIdx >= steps.length - 1
-    ? `sorted — ${steps.length - 1} comparisons`
-    : `step ${stepIdx}/${steps.length - 1} (${pct}%)`;
+    ? `đã sắp xếp — ${steps.length - 1} phép so sánh`
+    : `bước ${stepIdx}/${steps.length - 1} (${pct}%)`;
 }
 
 function tick() {
@@ -125,10 +126,10 @@ function tick() {
   draw();
 }
 function play() { if (playing) return; playing = true;
-  document.getElementById('play').textContent = 'Pause';
+  document.getElementById('play').textContent = 'Tạm dừng';
   timer = setInterval(tick, delay); }
 function stop() { playing = false;
-  document.getElementById('play').textContent = 'Play';
+  document.getElementById('play').textContent = 'Phát';
   clearInterval(timer); }
 
 function resize() {

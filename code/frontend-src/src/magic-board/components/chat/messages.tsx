@@ -7,7 +7,7 @@ import { ChatMarkdown } from './markdown';
 import { AiGlyph, Reasoning } from './trace';
 import { fmtAt, KIND_LABELS } from './utils';
 
-/** Clickable artifact reference pill shown under a message. */
+/** Thẻ tham chiếu kết quả (artifact) có thể bấm, hiện bên dưới tin nhắn. */
 function RefChip({
   artifact,
   onSelect,
@@ -19,7 +19,7 @@ function RefChip({
     <button
       onClick={onSelect}
       className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-      title={`Reference: ${artifact.title} — click to select it on the canvas`}
+      title={`Tham chiếu: ${artifact.title} — bấm để chọn nó trên bảng vẽ`}
     >
       <Package size={10} className="shrink-0" />
       <span className="truncate font-medium">
@@ -32,7 +32,7 @@ function RefChip({
   );
 }
 
-/** Hover-revealed copy action for assistant replies. */
+/** Nút sao chép hiện khi rê chuột, dành cho phản hồi của trợ lý. */
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -43,18 +43,18 @@ function CopyButton({ text }: { text: string }) {
           setCopied(true);
           setTimeout(() => setCopied(false), 1200);
         } catch {
-          /* clipboard unavailable */
+          /* bảng tạm (clipboard) không khả dụng */
         }
       }}
       className="flex items-center gap-1 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      title="Copy reply"
+      title="Sao chép phản hồi"
     >
       {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
     </button>
   );
 }
 
-/** One chat turn. User = right pill; assistant = unbubbled prose + glyph. */
+/** Một lượt trò chuyện. Người dùng = bong bóng bên phải; trợ lý = văn xuôi không bong bóng + glyph. */
 export function MessageRow({
   m,
   artifact,
@@ -86,9 +86,9 @@ export function MessageRow({
         {removed && (
           <div
             className="mb-1 inline-block rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground"
-            title="The referenced artifact is no longer on the canvas"
+            title="Kết quả (artifact) được tham chiếu không còn trên bảng vẽ"
           >
-            artifact #{m.artifact_id!.slice(0, 6)} removed
+            kết quả #{m.artifact_id!.slice(0, 6)} đã bị xóa
           </div>
         )}
         {isUser ? (
@@ -126,9 +126,9 @@ export function MessageRow({
   );
 }
 
-const SUGGESTIONS = ['Increase gravity', 'Add a pause button', 'Speed up the animation'];
+const SUGGESTIONS = ['Tăng trọng lực', 'Thêm nút tạm dừng', 'Tăng tốc hoạt ảnh'];
 
-/** Centered welcome shown before the first message. */
+/** Lời chào giữa màn hình, hiện trước tin nhắn đầu tiên. */
 export function EmptyState({ onPick }: { onPick: (s: string) => void }) {
   return (
     <div className="my-auto flex flex-col items-center gap-4 px-6 py-10 text-center">
@@ -136,9 +136,9 @@ export function EmptyState({ onPick }: { onPick: (s: string) => void }) {
         <Sparkles size={18} />
       </span>
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Refine this board</p>
+        <p className="text-sm font-semibold text-foreground">Tinh chỉnh bảng này</p>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Select a sim or diagram on the canvas, then describe the change in words.
+          Chọn một mô phỏng hoặc sơ đồ trên bảng vẽ, rồi mô tả thay đổi bằng lời.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-1.5">

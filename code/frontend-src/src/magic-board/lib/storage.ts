@@ -1,14 +1,14 @@
 /**
- * Board persistence — the ai4edu FastAPI + SQLite boards API, replaced by
- * localStorage. Now with real multi-board support.
+ * Lưu trữ bảng — API bảng dùng FastAPI + SQLite của ai4edu, được thay bằng
+ * localStorage. Nay có hỗ trợ thật sự cho nhiều bảng.
  *
- * Layout:
+ * Bố cục:
  *   magic-board.index        -> { boards: [{id,name,updated_at}], activeId }
- *   magic-board.board.<id>   -> the full Board record
+ *   magic-board.board.<id>   -> bản ghi Board đầy đủ
  *
- * The original single-board build wrote everything to one `magic-board.v1`
- * key; `migrateLegacy()` upgrades that in place the first time this module
- * runs, so an existing session keeps its canvas.
+ * Bản dựng một-bảng ban đầu ghi mọi thứ vào một khóa `magic-board.v1`;
+ * `migrateLegacy()` nâng cấp tại chỗ trong lần đầu mô-đun này chạy, nên một
+ * phiên làm việc đang có vẫn giữ nguyên bảng vẽ.
  */
 import type { Artifact, Board, BoardScene, BoardSummary, ChatMessage } from './types';
 
@@ -22,7 +22,7 @@ export function newBoardId(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 20);
 }
 
-export function emptyBoard(name = 'Untitled board'): Board {
+export function emptyBoard(name = 'Bảng chưa đặt tên'): Board {
   return {
     id: newBoardId(),
     name,
@@ -57,7 +57,7 @@ function writeIndex(index: BoardIndex): void {
   try {
     localStorage.setItem(INDEX_KEY, JSON.stringify(index));
   } catch (e) {
-    console.error('Could not write the board index', e);
+    console.error('Không thể ghi chỉ mục (index) của bảng', e);
   }
 }
 
@@ -75,26 +75,26 @@ function normalizeBoard(parsed: Partial<Board>): Board {
   };
 }
 
-/** Read one board by id (without touching the index). */
+/** Đọc một bảng theo id (không đụng tới chỉ mục). */
 export function readBoard(id: string): Board | null {
   try {
     const raw = localStorage.getItem(BOARD_PREFIX + id);
     if (!raw) return null;
     return normalizeBoard(JSON.parse(raw) as Partial<Board>);
   } catch (e) {
-    console.error('Saved board was unreadable', e);
+    console.error('Không đọc được bảng đã lưu', e);
     return null;
   }
 }
 
-/** Write one board and refresh its index row. */
+/** Ghi một bảng và làm mới dòng chỉ mục của nó. */
 export function writeBoard(board: Board): Board {
   const next: Board = { ...board, updated_at: new Date().toISOString() };
   try {
     localStorage.setItem(BOARD_PREFIX + next.id, JSON.stringify(next));
   } catch (e) {
-    // Quota is the realistic failure — scenes with embedded sim HTML add up.
-    console.error('Could not save the board locally', e);
+    // Hết dung lượng là lỗi thực tế hay gặp — cảnh có nhúng HTML mô phỏng sẽ phình ra.
+    console.error('Không thể lưu bảng vào máy cục bộ', e);
   }
   const index = readIndex();
   const summary: BoardSummary = {
@@ -110,8 +110,9 @@ export function writeBoard(board: Board): Board {
 }
 
 /**
- * Patch a board's saved state. `scene` is omitted when no canvas snapshot
- * exists yet, so a mid-mount autosave can never blank a saved board.
+ * Cập nhật một phần trạng thái đã lưu của bảng. `scene` bị bỏ qua khi chưa có
+ * ảnh chụp bảng vẽ, nhờ vậy thao tác tự lưu giữa chừng lúc gắn kết (mount)
+ * không bao giờ xóa trắng một bảng đã lưu.
  */
 export function saveBoard(
   board: Board,
@@ -147,7 +148,7 @@ export function setActiveBoardId(id: string): void {
   writeIndex(index);
 }
 
-export function createBoard(name = 'Untitled board'): Board {
+export function createBoard(name = 'Bảng chưa đặt tên'): Board {
   const board = emptyBoard(name);
   writeBoard(board);
   setActiveBoardId(board.id);
@@ -160,15 +161,22 @@ export function renameBoard(id: string, name: string): void {
   writeBoard({ ...board, name: name.trim() || board.name });
 }
 
-export function duplicateBoard(id: string): Board | null {
+/** Nhãn hậu tố cho bản sao — tách ra để đổi được mà không phải sửa logic. */
+export const COPY_SUFFIX = '(bản sao)';
+
+/**
+ * Nhân bản một bảng. `name` cho phép đặt tên tường minh; mặc định là
+ * "<tên gốc> (bản sao)".
+ */
+export function duplicateBoard(id: string, name?: string): Board | null {
   const source = readBoard(id);
   if (!source) return null;
-  // Fresh ids for every generated element would break the artifact<->element
-  // linkage, so the artifact ids are re-minted as a set and carried over.
+  // Cấp id mới cho mọi phần tử được sinh ra sẽ phá vỡ liên kết kết quả <-> phần
+  // tử, nên id của các kết quả được cấp lại theo cả tập hợp và giữ nguyên.
   const copy: Board = {
     ...source,
     id: newBoardId(),
-    name: `${source.name} copy`,
+    name: name ?? `${source.name} ${COPY_SUFFIX}`,
     scene: JSON.parse(JSON.stringify(source.scene)) as BoardScene,
     chat_messages: JSON.parse(JSON.stringify(source.chat_messages)) as ChatMessage[],
     artifacts: JSON.parse(JSON.stringify(source.artifacts)) as Artifact[],
@@ -182,7 +190,7 @@ export function deleteBoard(id: string): void {
   try {
     localStorage.removeItem(BOARD_PREFIX + id);
   } catch {
-    /* ignoring */
+    /* bỏ qua */
   }
   const index = readIndex();
   index.boards = index.boards.filter((b) => b.id !== id);
@@ -191,8 +199,8 @@ export function deleteBoard(id: string): void {
 }
 
 /**
- * Resolve the board to open at startup, creating one when there is none.
- * Runs the legacy single-board migration first.
+ * Xác định bảng cần mở lúc khởi động, tạo mới nếu chưa có bảng nào.
+ * Chạy bước di trú từ bản một-bảng cũ trước tiên.
  */
 export function loadOrCreateActiveBoard(): Board {
   migrateLegacy();
@@ -200,8 +208,8 @@ export function loadOrCreateActiveBoard(): Board {
   const active = index.activeId ? readBoard(index.activeId) : null;
   if (active) return active;
 
-  // Index present but the active record is gone (or never set): fall back to
-  // the most recent board, else make a fresh one.
+  // Chỉ mục vẫn còn nhưng bản ghi đang hoạt động đã mất (hoặc chưa từng được
+  // đặt): quay về bảng mới nhất, nếu không có thì tạo một bảng mới.
   const latest = listBoards()[0];
   if (latest) {
     const board = readBoard(latest.id);
@@ -210,10 +218,10 @@ export function loadOrCreateActiveBoard(): Board {
       return board;
     }
   }
-  return createBoard('My board');
+  return createBoard('Bảng của tôi');
 }
 
-/** Upgrade a pre-multi-board `magic-board.v1` record into the new layout. */
+/** Nâng cấp bản ghi `magic-board.v1` từ thời một-bảng sang bố cục mới. */
 export function migrateLegacy(): void {
   let raw: string | null = null;
   try {
@@ -229,6 +237,6 @@ export function migrateLegacy(): void {
     setActiveBoardId(board.id);
     localStorage.setItem(MIGRATED_KEY, new Date().toISOString());
   } catch (e) {
-    console.error('Could not migrate the previous single-board save', e);
+    console.error('Không thể di trú bản lưu một-bảng trước đó', e);
   }
 }

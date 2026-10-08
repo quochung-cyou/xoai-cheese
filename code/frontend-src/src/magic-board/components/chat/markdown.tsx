@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/** Minimal GFM map — prose-only, keeps the flat chat look. */
+/** Ánh xạ GFM tối giản — chỉ văn xuôi, giữ giao diện trò chuyện phẳng. */
 const MD_COMPONENTS = {
   p: ({ children }: { children?: ReactNode }) => (
     <p className="mb-2 last:mb-0">{children}</p>

@@ -4,7 +4,7 @@ import { ArrowUp, Settings2, Square } from 'lucide-react';
 import type { Artifact } from '../../lib/types';
 import { KIND_LABELS } from './utils';
 
-/** Floating composer: context chip + auto-growing textarea + circular send. */
+/** Khung soạn tin nổi (composer): chip ngữ cảnh + vùng nhập tự giãn + nút gửi tròn. */
 export function ChatComposer({
   input,
   inputRef,
@@ -50,7 +50,7 @@ export function ChatComposer({
             </span>
             {detached && (
               <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600">
-                off canvas
+                ngoài bảng vẽ
               </span>
             )}
           </div>
@@ -62,18 +62,18 @@ export function ChatComposer({
           onKeyDown={handleKey}
           placeholder={
             activeArtifact
-              ? 'Describe a change…'
-              : 'Select a sim or diagram on the canvas to refine…'
+              ? 'Mô tả thay đổi…'
+              : 'Chọn một mô phỏng hoặc sơ đồ trên bảng vẽ để tinh chỉnh…'
           }
           rows={1}
           className="field-sizing-content max-h-40 min-h-9 w-full resize-none bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-muted-foreground/70"
         />
         <div className="flex items-center gap-1 px-2 pb-2">
-          {/* Model chip — opens the settings dialog. */}
+          {/* Chip mô hình (model) — mở hộp thoại cài đặt. */}
           <button
             onClick={onOpenSettings}
             className="flex h-8 items-center gap-1.5 rounded-full px-2.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title={`Model settings — ${modelLabel}`}
+            title={`Cài đặt mô hình (model) — ${modelLabel}`}
           >
             <Settings2 size={14} />
             <span className="max-w-36 truncate font-mono text-[10px]">{modelLabel}</span>
@@ -83,7 +83,7 @@ export function ChatComposer({
               <button
                 onClick={onStop}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/85"
-                title="Stop refining"
+                title="Dừng tinh chỉnh"
               >
                 <Square size={12} className="fill-current" />
               </button>
@@ -92,7 +92,7 @@ export function ChatComposer({
                 onClick={onSend}
                 disabled={!input.trim()}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/85 disabled:opacity-30"
-                title="Send"
+                title="Gửi"
               >
                 <ArrowUp size={15} />
               </button>

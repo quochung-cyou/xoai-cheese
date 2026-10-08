@@ -1,8 +1,9 @@
 /**
- * AITC 2026 — Xoai Cheese
+ * AITC 2026 — Xoài Cheese
  *
- * The Magic Board is the app: sketch on the canvas, analyze the drawing, and
- * get an interactive simulation or an editable diagram back on the board.
+ * Bảng Ma Thuật chính là ứng dụng: vẽ phác thảo lên bảng vẽ, phân tích bản vẽ,
+ * rồi nhận lại một mô phỏng tương tác hoặc một sơ đồ chỉnh sửa được ngay trên
+ * bảng.
  */
 import MagicBoard from '@/magic-board/components/BoardApp'
 
