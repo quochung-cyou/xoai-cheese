@@ -57,6 +57,7 @@ import {
 import { APP_NAME } from '../lib/boardTheme';
 import type { CatalogItem } from '../lib/catalog';
 import { findFreeRect } from '../lib/placement';
+import { ensureAnatomyLessons } from '../lib/lessonScene';
 import { instantiate, scenarioArtifact } from '../lib/scenarios';
 import { loadAnalyzeHotkey, loadLLMConfig, modelLabel, type LLMConfig } from '../lib/settings';
 import {
@@ -341,7 +342,7 @@ export default function BoardApp() {
       if (!created.length) return null;
 
       api.updateScene({
-        elements: [...existing, ...created],
+        elements: ensureAnatomyLessons([...existing, ...created], [...artifactsRef.current, artifact]),
         captureUpdate: CaptureUpdateAction.NEVER,
       });
 
@@ -598,11 +599,9 @@ export default function BoardApp() {
         // Thăng cấp phần giữ chỗ ngay tại chỗ — người dùng có thể đã di chuyển
         // nó, nên phần tử đã được vẽ sẵn và chỉ còn phần ghi sổ.
         api.updateScene({
-          elements: promotePendingArtifact(
-            api.getSceneElements(),
-            pendingId,
-            artifact.id,
-            artifact.payload.html ?? '',
+          elements: ensureAnatomyLessons(
+            promotePendingArtifact(api.getSceneElements(), pendingId, artifact.id, artifact.payload.html ?? ''),
+            [...artifactsRef.current, artifact],
           ),
           captureUpdate: CaptureUpdateAction.NEVER,
         });
@@ -746,7 +745,9 @@ export default function BoardApp() {
       // Nhắm mục tiêu tinh chỉnh theo lựa chọn: chọn một phần tử đã tạo (hoặc
       // một bản sao — artifactId đi kèm customData) là nhắm vào kết quả của nó.
       const selected = elements.filter((el) => appState.selectedElementIds[el.id]);
-      const gen = selected.find((el) => artifactIdOf(el));
+      const gen = selected.find((el) =>
+        artifactsRef.current.some((a) => a.id === artifactIdOf(el)),
+      );
       if (gen) {
         const targetId = artifactIdOf(gen);
         if (targetId) {
@@ -789,6 +790,13 @@ export default function BoardApp() {
       if (restoredForRef.current === boardId) return;
       restoredForRef.current = boardId;
 
+      // Cả bảng cũ chưa có thẻ bài học cũng được bổ sung một lần khi mở lại.
+      const withLessons = ensureAnatomyLessons(els, artifactsRef.current);
+      if (withLessons.length !== els.length) {
+        api.updateScene({ elements: withLessons, captureUpdate: CaptureUpdateAction.NEVER });
+        markDirty();
+      }
+
       const keys = cacheKeysRef.current;
       if (!keys.length) return;
       // Cảnh đã lưu đã chứa sẵn các phần tử được tạo.
@@ -821,7 +829,7 @@ export default function BoardApp() {
       if (!added.length) return;
 
       api.updateScene({
-        elements: [...els, ...added],
+        elements: ensureAnatomyLessons([...els, ...added], restoredArtifacts),
         captureUpdate: CaptureUpdateAction.NEVER,
       });
       setArtifactsState(restoredArtifacts);

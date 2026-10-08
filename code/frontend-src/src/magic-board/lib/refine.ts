@@ -75,10 +75,16 @@ async function* streamElementsRefinement(
 
   const parsed = parseLlmJson(rawParts.join(''));
   const ops = (parsed as { ops?: unknown }).ops;
-  if (!Array.isArray(ops) || !ops.length) {
-    throw new LlmError(
-      'Mô hình không trả về chỉnh sửa nào cho sơ đồ. Hãy thử diễn đạt lại yêu cầu.',
-    );
+  if (!Array.isArray(ops)) {
+    throw new LlmError('Mô hình trả về các chỉnh sửa sơ đồ sai định dạng.');
+  }
+  if (!ops.length) {
+    const answer = (parsed as { message?: unknown }).message;
+    if (typeof answer === 'string' && answer.trim()) {
+      yield { type: 'done', message: answer.trim() };
+      return;
+    }
+    throw new LlmError('Mô hình không trả về câu trả lời hay chỉnh sửa nào cho sơ đồ.');
   }
 
   let newElements: SkeletonElement[];
@@ -270,6 +276,13 @@ async function* streamHtmlRefinement(
     }
   } catch {
     /* cũng không phải cấu trúc cũ — chuyển xuống phần thất bại bên dưới */
+  }
+
+  // An answer-only turn has no edit markers: keep the document unchanged and
+  // place the model's answer in chat instead of treating it as a failed edit.
+  if (!failed.size && !edits.length && !rewriteCode && narration) {
+    yield { type: 'done', message: narration };
+    return;
   }
 
   if (failed.size) {

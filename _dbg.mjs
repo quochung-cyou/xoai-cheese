@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+const head = `${process.env.TEMP}/vn-head-en/function_plot.html`;
+const t = fs.readFileSync(head, 'utf8');
+const m = t.match(/<head>\s*<script>[\s\S]*?<\/script>/);
+console.log('HEAD: match found:', !!m, 'len:', m ? m[0].length : 0);
+console.log('HEAD: first 80 of match:', JSON.stringify(m ? m[0].slice(0, 80) : ''));
+console.log("HEAD: includes ||'Request failed'; :", t.includes("||'Request failed';"));
+const i = t.indexOf('Request failed');
+console.log('HEAD: context:', JSON.stringify(t.slice(Math.max(0, i - 100), i + 40)));
+const rep = fs.readFileSync('C:/Users/LENOVO/Documents/GitHub/aitc2026-team-377-xoai-cheese/code/frontend-src/public/mb-assets/scenarios/pendulum.html', 'utf8').match(/<head>\s*<script>[\s\S]*?<\/script>/)[0];
+console.log('exported reporter len:', rep.length, "includes ||'Request failed'; :", rep.includes("||'Request failed';"));
+const swapped = t.replace(/<head>\s*<script>[\s\S]*?<\/script>/, rep);
+console.log('after swap includes:', swapped.includes("||'Request failed';"));
+console.log('swapped head 1-5:', JSON.stringify(swapped.split('\n').slice(0, 5)));

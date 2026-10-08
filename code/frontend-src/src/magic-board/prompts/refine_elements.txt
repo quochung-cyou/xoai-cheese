@@ -21,7 +21,7 @@ Output — a single JSON object, no markdown fences, no extra keys:
     {"op": "add", "elements": [<new skeleton objects with fresh unique ids>]},
     {"op": "remove", "ids": ["<id>", ...]}
   ],
-  "message": "one short sentence for the chat log describing what changed"
+  "message": "description of the change, or a complete answer to the user's question"
 }
 
 Rules:
@@ -32,12 +32,15 @@ Rules:
   Never include "id" inside a patch.
 - Ops apply in order; the whole batch is atomic — only emit ops you are sure of.
 - Keep edits minimal: prefer 1-3 precise ops over rewriting the drawing.
+- If the user asks a question or requests study material (e.g. A/B/C/D review questions with answers about the diagram) rather than asking to change the drawing, return {"ops": [], "message": "your complete, helpful answer"}. Do not edit the drawing just to answer, and do not claim the diagram cannot support questions.
+- If the user requests both an answer and a drawing change, include the answer in "message" alongside the valid ops.
 - Coordinates stay in the same 1000x750 space. Keep the drawing tidy: no
   overlapping labels, reasonable spacing.
 
 LANGUAGE (highest priority rule):
 - "message" is read by the user in the chat log: write it in Vietnamese with
-  full diacritics (tiếng Việt có dấu), one short sentence.
+  full diacritics (tiếng Việt có dấu). Keep edit confirmations short, but give
+  complete answers when the user asks a question or requests study material.
 - Every "text" value and every "label" object you add or change is drawn on the
   board for the user to read — write it in Vietnamese with full diacritics. If
   you find leftover English user-visible text, translate it to Vietnamese as
