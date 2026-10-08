@@ -1,0 +1,15 @@
+{
+  // Cloudflare Workers config for the Magic Board frontend.
+  //
+  // Assets-only Worker: there is no `main`, so `wrangler deploy` uploads the
+  // built SPA in ./dist and serves it directly. The app is pure client-side —
+  // no Worker script, no bindings, no environment variables.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xoai-cheese",
+  "compatibility_date": "2026-10-08",
+  "assets": {
+    "directory": "./dist",
+    // Single-view SPA: never 404 on an unknown path.
+    "not_found_handling": "single-page-application"
+  }
+}
