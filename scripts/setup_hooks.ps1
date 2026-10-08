@@ -5,16 +5,19 @@ $ErrorActionPreference = 'Stop'
 
 $HookFile = '.git/hooks/pre-push'
 
-# Git on Windows runs hooks via Git Bash, so the hook body must be bash.
-$HookBody = @'
-#!/usr/bin/env bash
+# Git on Windows runs hooks via Git Bash. The file MUST be UTF-8 without BOM
+# and LF-only; PowerShell Set-Content -Encoding UTF8 writes a BOM + CRLF, which
+# makes git fail with: cannot spawn .git/hooks/pre-push: No such file or directory
+$HookBody = @"
+#!/bin/sh
 # Pre-push: sweep recent Antigravity / Gemini prompts, then submit AI logs.
-bash scripts/_pyrun.sh scripts/log_antigravity.py --auto || true
-bash scripts/_pyrun.sh scripts/submit_log.py || true
+python scripts/log_antigravity.py --auto || true
+python scripts/submit_log.py || true
 exit 0
-'@
-
-Set-Content -Path $HookFile -Value $HookBody -Encoding UTF8 -NoNewline
+"@
+$HookBody = $HookBody -replace "`r`n", "`n"
+$utf8 = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $HookFile), $HookBody, $utf8)
 Write-Host "[ai-log] Git pre-push hook installed."
 
 if (-not (Test-Path .ai-log)) { New-Item -ItemType Directory -Path .ai-log | Out-Null }
